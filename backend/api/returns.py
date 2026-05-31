@@ -1,0 +1,95 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import List
+from backend.database import get_db
+from backend.models.user import User
+from backend.models.return_entry import ReturnEntry
+from backend.models.inward import InwardEntry
+from backend.models.beam import Beam, BeamStatus
+from backend.schemas.return_entry import ReturnCreate, ReturnResponse
+from backend.api.deps import get_current_user
+
+router = APIRouter(prefix="/returns", tags=["Return Entries"])
+
+
+@router.post("/", response_model=ReturnResponse)
+def create_return(
+    return_data: ReturnCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    inward = db.query(InwardEntry).filter(
+        InwardEntry.po_number == return_data.po_number
+    ).order_by(InwardEntry.cycle_number.desc()).first()
+
+    if not inward:
+        raise HTTPException(status_code=404, detail="No inward entry found for this PO")
+
+    new_return = ReturnEntry(
+        id=f"return_{hash(return_data.po_number + str(return_data.return_type))}",
+        po_number=return_data.po_number,
+        cycle_number=inward.cycle_number,
+        return_type=return_data.return_type,
+        beams_returned=return_data.beams_returned,
+        warp_metres=return_data.warp_metres,
+        weft_metres=return_data.weft_metres,
+        return_cones=return_data.return_cones,
+        quality_grade=return_data.quality_grade,
+        operator_name=return_data.operator_name,
+        receiver_name=return_data.receiver_name,
+        return_date=return_data.return_date,
+        remarks=return_data.remarks,
+        submitted_by=current_user.id
+    )
+
+    db.add(new_return)
+    db.commit()
+    db.refresh(new_return)
+
+    if return_data.return_type == "warping_return" and return_data.beam_entries:
+        po = db.query(InwardEntry).filter(
+            InwardEntry.po_number == return_data.po_number
+        ).first()
+        exist_beam_count = db.query(Beam).filter(
+            Beam.po_number == return_data.po_number,
+            Beam.cycle_number == inward.cycle_number
+        ).count()
+
+        for idx, beam_entry in enumerate(return_data.beam_entries):
+            beam_number = f"B{str(exist_beam_count + idx + 1).zfill(3)}"
+            beam = Beam(
+                id=f"beam_{hash(beam_number)}",
+                po_number=return_data.po_number,
+                cycle_number=inward.cycle_number,
+                return_entry_id=new_return.id,
+                beam_number=beam_number,
+                beam_metres=beam_entry.beam_metres,
+                status=BeamStatus.AVAILABLE
+            )
+            db.add(beam)
+
+        db.commit()
+
+    return new_return
+
+
+@router.get("/", response_model=List[ReturnResponse])
+def list_returns(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role == "admin":
+        returns = db.query(ReturnEntry).all()
+    else:
+        returns = db.query(ReturnEntry).filter(
+            ReturnEntry.submitted_by == current_user.id
+        ).all()
+    return returns
+
+
+@router.get("/{return_id}", response_model=ReturnResponse)
+def get_return(return_id: str, db: Session = Depends(get_db)):
+    return_entry = db.query(ReturnEntry).filter(ReturnEntry.id == return_id).first()
+    if not return_entry:
+        raise HTTPException(status_code=404, detail="Return entry not found")
+    return return_entry
