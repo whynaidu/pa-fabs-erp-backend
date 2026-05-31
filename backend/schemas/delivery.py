@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 from typing import Optional, List
 from datetime import datetime
 import json
@@ -7,7 +7,7 @@ import json
 class PieceData(BaseModel):
     type: Optional[str] = None
     piece_no: str
-    metres: float
+    metres: float = Field(gt=0)
 
 
 class DeliveryBase(BaseModel):

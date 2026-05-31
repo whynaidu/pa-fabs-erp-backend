@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List
 from backend.database import get_db
 from backend.models.user import User
@@ -142,7 +143,11 @@ def create_delivery(
             loom.allocated_at = None
 
     po.status = POStatus.COMPLETE
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Delivery already exists for this PO+cycle")
     db.refresh(new_delivery)
 
     return new_delivery

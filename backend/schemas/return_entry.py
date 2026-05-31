@@ -1,12 +1,12 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from backend.models.return_entry import ReturnType
 
 
 class BeamEntry(BaseModel):
-    beam_metres: float
-    total_ends: int
+    beam_metres: float = Field(gt=0)
+    total_ends: int = Field(gt=0)
 
 
 class ReturnBase(BaseModel):

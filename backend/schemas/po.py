@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from backend.models.po import POStatus
@@ -20,7 +20,7 @@ class POBase(BaseModel):
     reed: Optional[str] = None
     pick: Optional[str] = None
     width: Optional[str] = None
-    order_qty: float
+    order_qty: float = Field(gt=0)
     cost_per_meter: Optional[float] = None
     order_date: Optional[datetime] = None
     expected_date: Optional[datetime] = None

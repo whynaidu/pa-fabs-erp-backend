@@ -1,11 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
 
 class ManufacturingBase(BaseModel):
-    loom_number: int
-    metres_today: float
+    loom_number: int = Field(gt=0)
+    metres_today: float = Field(gt=0)
     fabric_metres: Optional[float] = None
     operator_name: Optional[str] = None
     received_date: Optional[datetime] = None

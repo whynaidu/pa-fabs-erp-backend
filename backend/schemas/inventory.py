@@ -1,12 +1,12 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
 
 class InventoryBase(BaseModel):
     po_number: str
-    loom_number: int
-    fabric_metres: float
+    loom_number: int = Field(gt=0)
+    fabric_metres: float = Field(gt=0)
     quality_grade: Optional[str] = None
     received_date: datetime
     received_by: str
