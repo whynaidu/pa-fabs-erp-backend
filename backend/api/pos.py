@@ -48,6 +48,18 @@ def create_yarn_details(db: Session, po_number: str, warp_rows: list, weft_rows:
     db.commit()
 
 
+def attach_yarn(po, db: Session):
+    """Attach the PO's warp/weft yarn rows (stored separately) onto the ORM object
+    so the response includes them — these feed the dropdowns on every form."""
+    rows = db.query(POYarnDetail).filter(POYarnDetail.po_number == po.po_number).all()
+    to_row = lambda r: {"count": r.count or "", "colour": r.colour or "",
+                        "qty_kg": float(r.qty_kg) if r.qty_kg is not None else None,
+                        "bundles": r.bundles}
+    po.warp_rows = [to_row(r) for r in rows if r.yarn_type == YarnType.WARP]
+    po.weft_rows = [to_row(r) for r in rows if r.yarn_type == YarnType.WEFT]
+    return po
+
+
 @router.post("/", response_model=POResponse)
 def create_po(po: POCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po.po_number).first()
@@ -76,7 +88,7 @@ def create_po(po: POCreate, db: Session = Depends(get_db), current_user: User = 
         create_yarn_details(db, po.po_number, po.warp_rows, po.weft_rows)
         db.refresh(db_po)
 
-    return db_po
+    return attach_yarn(db_po, db)
 
 
 @router.get("/", response_model=List[POResponse])
@@ -88,7 +100,7 @@ def list_pos(
         pos = db.query(PurchaseOrder).all()
     else:
         pos = db.query(PurchaseOrder).filter(PurchaseOrder.user_id == current_user.id).all()
-    return pos
+    return [attach_yarn(p, db) for p in pos]
 
 
 @router.get("/{po_number}", response_model=POResponse)
@@ -100,7 +112,7 @@ def get_po(po_number: str, db: Session = Depends(get_db), current_user: User = D
     if current_user.role != "admin" and po.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to view this PO")
 
-    return po
+    return attach_yarn(po, db)
 
 
 @router.get("/{po_number}/yarn", response_model=POYarnResponse)
