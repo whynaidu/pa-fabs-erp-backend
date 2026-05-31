@@ -98,4 +98,5 @@ def get_return(return_id: str, db: Session = Depends(get_db), current_user: User
     return_entry = db.query(ReturnEntry).filter(ReturnEntry.id == return_id).first()
     if not return_entry:
         raise HTTPException(status_code=404, detail="Return entry not found")
+    require_po_access(return_entry.po_number, db, current_user)
     return return_entry

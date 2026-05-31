@@ -79,6 +79,7 @@ def get_outward(outward_id: str, db: Session = Depends(get_db), current_user: Us
     outward = db.query(OutwardEntry).filter(OutwardEntry.id == outward_id).first()
     if not outward:
         raise HTTPException(status_code=404, detail="Outward entry not found")
+    require_po_access(outward.po_number, db, current_user)
     return outward
 
 
@@ -87,6 +88,7 @@ def mark_outward_done(outward_id: str, db: Session = Depends(get_db), current_us
     outward = db.query(OutwardEntry).filter(OutwardEntry.id == outward_id).first()
     if not outward:
         raise HTTPException(status_code=404, detail="Outward entry not found")
+    require_po_access(outward.po_number, db, current_user)
     outward.is_done = True
     db.commit()
     db.refresh(outward)

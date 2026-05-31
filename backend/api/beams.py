@@ -38,4 +38,5 @@ def get_beam(beam_id: str, db: Session = Depends(get_db), current_user: User = D
     beam = db.query(Beam).filter(Beam.id == beam_id).first()
     if not beam:
         raise HTTPException(status_code=404, detail="Beam not found")
+    require_po_access(beam.po_number, db, current_user)
     return beam

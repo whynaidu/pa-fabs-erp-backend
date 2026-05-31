@@ -105,6 +105,7 @@ def mark_manufacturing_done(mfg_id: str, db: Session = Depends(get_db), current_
     log = db.query(ManufacturingLog).filter(ManufacturingLog.id == mfg_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Manufacturing log not found")
+    require_po_access(log.po_number, db, current_user)
     log.is_done = True
     allocation = db.query(LoomAllocation).filter(
         LoomAllocation.loom_number == log.loom_number,

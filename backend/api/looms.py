@@ -102,27 +102,34 @@ def get_allocation(alloc_id: str, db: Session = Depends(get_db), current_user: U
     alloc = db.query(LoomAllocation).filter(LoomAllocation.id == alloc_id).first()
     if not alloc:
         raise HTTPException(status_code=404, detail="Allocation not found")
+    require_po_access(alloc.po_number, db, current_user)
     return alloc
 
 
 @router.patch("/allocations/{alloc_id}/status", response_model=LoomAllocationResponse)
 def update_allocation_status(alloc_id: str, status: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Update an allocation's status (active / completed / cancelled). Putting it
-    on hold parks the loom (on-hold); reactivating re-occupies it. The loom is
-    only freed by a delivery, never here."""
+    """Update an allocation's status (active / completed / cancelled). Completing
+    leaves the loom Occupied (it is freed only by a delivery). Cancelling releases
+    the loom back to Free, since a cancelled allocation never reaches delivery."""
     alloc = db.query(LoomAllocation).filter(LoomAllocation.id == alloc_id).first()
     if not alloc:
         raise HTTPException(status_code=404, detail="Allocation not found")
+    require_po_access(alloc.po_number, db, current_user)
     try:
         new_status = AllocationStatus(status)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid status (active/completed/cancelled)")
     alloc.status = new_status
     loom = db.query(Loom).filter(Loom.loom_number == alloc.loom_number).first()
-    if loom and loom.status != LoomStatus.FREE:
-        if status == "hold" or new_status == AllocationStatus.CANCELLED:
-            loom.status = LoomStatus.ON_HOLD
-        elif new_status == AllocationStatus.ACTIVE:
+    if loom:
+        if new_status == AllocationStatus.CANCELLED:
+            loom.status = LoomStatus.FREE
+            loom.current_po = None
+            loom.current_cycle = None
+            loom.current_beam = None
+            loom.allocated_by = None
+            loom.allocated_at = None
+        elif new_status == AllocationStatus.ACTIVE and loom.status == LoomStatus.ON_HOLD:
             loom.status = LoomStatus.OCCUPIED
     db.commit()
     db.refresh(alloc)

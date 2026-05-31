@@ -124,6 +124,7 @@ def get_inward(inward_id: str, db: Session = Depends(get_db), current_user: User
     inward = db.query(InwardEntry).filter(InwardEntry.id == inward_id).first()
     if not inward:
         raise HTTPException(status_code=404, detail="Inward entry not found")
+    require_po_access(inward.po_number, db, current_user)
     return inward
 
 
@@ -132,6 +133,7 @@ def mark_inward_done(inward_id: str, db: Session = Depends(get_db), current_user
     inward = db.query(InwardEntry).filter(InwardEntry.id == inward_id).first()
     if not inward:
         raise HTTPException(status_code=404, detail="Inward entry not found")
+    require_po_access(inward.po_number, db, current_user)
     inward.is_done = True
     db.commit()
     db.refresh(inward)

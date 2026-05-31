@@ -187,6 +187,7 @@ def get_delivery(delivery_id: str, db: Session = Depends(get_db), current_user: 
     delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
+    require_po_access(delivery.po_number, db, current_user)
     return delivery
 
 
