@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List
 import uuid
 from backend.database import get_db
@@ -48,25 +49,29 @@ def create_return(
     db.refresh(new_return)
 
     if return_data.return_type == "warping_return" and return_data.beam_entries:
-        exist_beam_count = db.query(Beam).filter(
-            Beam.po_number == return_data.po_number,
-            Beam.cycle_number == inward.cycle_number
-        ).count()
-
-        for idx, beam_entry in enumerate(return_data.beam_entries):
-            beam_number = f"B{str(exist_beam_count + idx + 1).zfill(3)}"
-            beam = Beam(
-                id=f"beam_{uuid.uuid4().hex}",
-                po_number=return_data.po_number,
-                cycle_number=inward.cycle_number,
-                return_entry_id=new_return.id,
-                beam_number=beam_number,
-                beam_metres=beam_entry.beam_metres,
-                status=BeamStatus.AVAILABLE
-            )
-            db.add(beam)
-
-        db.commit()
+        # beam_number is globally unique (it is the FK target for loom allocations),
+        # so the running number is global, not per-cycle. Retry on the rare race.
+        for attempt in range(5):
+            base = db.query(Beam).count()
+            for idx, beam_entry in enumerate(return_data.beam_entries):
+                beam = Beam(
+                    id=f"beam_{uuid.uuid4().hex}",
+                    po_number=return_data.po_number,
+                    cycle_number=inward.cycle_number,
+                    return_entry_id=new_return.id,
+                    beam_number=f"B{str(base + idx + 1).zfill(3)}",
+                    beam_metres=beam_entry.beam_metres,
+                    quality_grade=return_data.quality_grade,
+                    status=BeamStatus.AVAILABLE,
+                )
+                db.add(beam)
+            try:
+                db.commit()
+                break
+            except IntegrityError:
+                db.rollback()
+                if attempt == 4:
+                    raise HTTPException(status_code=409, detail="Could not allocate beam numbers; retry")
 
     return new_return
 
