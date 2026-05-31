@@ -7,6 +7,7 @@ from backend.models.user import User
 from backend.models.manufacturing import ManufacturingLog
 from backend.models.loom import Loom, LoomStatus
 from backend.models.loom_allocation import LoomAllocation, AllocationStatus
+from backend.models.inventory import Inventory
 from backend.models.po import PurchaseOrder
 from backend.schemas.manufacturing import ManufacturingCreate, ManufacturingResponse
 from backend.api.deps import get_current_user, require_po_access
@@ -14,6 +15,34 @@ from datetime import datetime
 import uuid
 
 router = APIRouter(prefix="/manufacturing", tags=["Manufacturing"])
+
+
+def _ensure_inventory_from_log(db: Session, log: ManufacturingLog, user_id: str) -> None:
+    """When weaving is marked done, receive the woven fabric into inventory so the
+    cycle becomes deliverable. Idempotent per (po, cycle, loom); uses fabric_metres
+    if given, else the day's metres. A separate explicit inventory entry can still
+    override grade/received-by."""
+    metres = log.fabric_metres if log.fabric_metres is not None else log.metres_today
+    if not metres or float(metres) <= 0:
+        return
+    exists = db.query(Inventory).filter(
+        Inventory.po_number == log.po_number,
+        Inventory.cycle_number == log.cycle_number,
+        Inventory.loom_number == log.loom_number,
+    ).first()
+    if exists:
+        return
+    db.add(Inventory(
+        id=f"inv_{uuid.uuid4().hex}",
+        po_number=log.po_number,
+        cycle_number=log.cycle_number,
+        loom_number=log.loom_number,
+        beam_id=log.beam_id,
+        fabric_metres=metres,
+        received_date=log.received_date or log.log_date,
+        received_by=log.received_by or "system",
+        submitted_by=user_id,
+    ))
 
 
 @router.post("/", response_model=ManufacturingResponse)
@@ -71,7 +100,8 @@ def create_manufacturing_log(
         ).first()
         if allocation:
             allocation.status = AllocationStatus.COMPLETED
-            db.commit()
+        _ensure_inventory_from_log(db, new_log, current_user.id)
+        db.commit()
 
     return new_log
 
@@ -113,6 +143,7 @@ def mark_manufacturing_done(mfg_id: str, db: Session = Depends(get_db), current_
     ).first()
     if allocation:
         allocation.status = AllocationStatus.COMPLETED
+    _ensure_inventory_from_log(db, log, current_user.id)
     db.commit()
     db.refresh(log)
     return log
