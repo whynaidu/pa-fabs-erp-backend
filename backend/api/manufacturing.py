@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List
 from sqlalchemy import func
 from backend.database import get_db
@@ -101,7 +102,10 @@ def create_manufacturing_log(
         if allocation:
             allocation.status = AllocationStatus.COMPLETED
         _ensure_inventory_from_log(db, new_log, current_user.id)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()   # inventory already received for this loom/cycle (race) — log is saved
 
     return new_log
 
@@ -144,7 +148,10 @@ def mark_manufacturing_done(mfg_id: str, db: Session = Depends(get_db), current_
     if allocation:
         allocation.status = AllocationStatus.COMPLETED
     _ensure_inventory_from_log(db, log, current_user.id)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()   # inventory already received for this loom/cycle (race)
     db.refresh(log)
     return log
 

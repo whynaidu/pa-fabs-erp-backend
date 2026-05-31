@@ -1,10 +1,13 @@
-from sqlalchemy import Column, String, Numeric, Integer, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, Numeric, Integer, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.sql import func
 from backend.database import Base
 
 
 class Inventory(Base):
     __tablename__ = "inventory"
+    # One finished-fabric record per loom per PO+cycle (backstop for the
+    # idempotent auto-create on manufacturing-done).
+    __table_args__ = (UniqueConstraint("po_number", "cycle_number", "loom_number", name="uq_inventory_po_cycle_loom"),)
 
     id = Column(String, primary_key=True, index=True)
     po_number = Column(String(80), ForeignKey("purchase_orders.po_number"), nullable=False, index=True)

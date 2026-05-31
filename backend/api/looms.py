@@ -121,7 +121,10 @@ def update_allocation_status(alloc_id: str, status: str, db: Session = Depends(g
         raise HTTPException(status_code=400, detail="Invalid status (active/completed/cancelled)")
     alloc.status = new_status
     loom = db.query(Loom).filter(Loom.loom_number == alloc.loom_number).first()
-    if loom:
+    # Only touch the loom if it is still held by THIS allocation — otherwise a stale
+    # allocation could wipe a newer PO's occupancy on the same loom.
+    owns_loom = bool(loom) and loom.current_po == alloc.po_number and loom.current_cycle == alloc.cycle_number
+    if owns_loom:
         if new_status == AllocationStatus.CANCELLED:
             loom.status = LoomStatus.FREE
             loom.current_po = None

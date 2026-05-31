@@ -22,42 +22,53 @@ router = APIRouter(prefix="/pos", tags=["Purchase Orders"])
 
 
 def create_yarn_details(db: Session, po_number: str, warp_rows: list, weft_rows: list):
-    for row in warp_rows:
-        detail = POYarnDetail(
-            id=f"yarn_{uuid.uuid4().hex}",
-            po_number=po_number,
-            yarn_type=YarnType.WARP,
-            count=row.count,
-            colour=row.colour,
-            qty_kg=row.qty_kg,
-            bundles=row.bundles
-        )
-        db.add(detail)
-
-    for row in weft_rows:
-        detail = POYarnDetail(
-            id=f"yarn_{uuid.uuid4().hex}",
-            po_number=po_number,
-            yarn_type=YarnType.WEFT,
-            count=row.count,
-            colour=row.colour,
-            qty_kg=row.qty_kg,
-            bundles=row.bundles
-        )
-        db.add(detail)
+    # Rows arrive as Pydantic models (create) or plain dicts (update via .dict()).
+    g = lambda row, k: row.get(k) if isinstance(row, dict) else getattr(row, k, None)
+    for yarn_type, rows in ((YarnType.WARP, warp_rows), (YarnType.WEFT, weft_rows)):
+        for row in rows:
+            db.add(POYarnDetail(
+                id=f"yarn_{uuid.uuid4().hex}",
+                po_number=po_number,
+                yarn_type=yarn_type,
+                count=g(row, "count"),
+                colour=g(row, "colour"),
+                qty_kg=g(row, "qty_kg"),
+                bundles=g(row, "bundles"),
+            ))
     db.commit()
 
 
-def attach_yarn(po, db: Session):
-    """Attach the PO's warp/weft yarn rows (stored separately) onto the ORM object
-    so the response includes them — these feed the dropdowns on every form."""
-    rows = db.query(POYarnDetail).filter(POYarnDetail.po_number == po.po_number).all()
-    to_row = lambda r: {"count": r.count or "", "colour": r.colour or "",
-                        "qty_kg": float(r.qty_kg) if r.qty_kg is not None else None,
-                        "bundles": r.bundles}
-    po.warp_rows = [to_row(r) for r in rows if r.yarn_type == YarnType.WARP]
-    po.weft_rows = [to_row(r) for r in rows if r.yarn_type == YarnType.WEFT]
+def _to_yarn_row(r):
+    return {"count": r.count or "", "colour": r.colour or "",
+            "qty_kg": float(r.qty_kg) if r.qty_kg is not None else None,
+            "bundles": r.bundles}
+
+
+def _set_yarn(po, rows):
+    po.warp_rows = [_to_yarn_row(r) for r in rows if r.yarn_type == YarnType.WARP]
+    po.weft_rows = [_to_yarn_row(r) for r in rows if r.yarn_type == YarnType.WEFT]
     return po
+
+
+def attach_yarn(po, db: Session):
+    """Attach a single PO's warp/weft yarn rows (stored separately) onto the ORM
+    object so the response includes them — these feed the dropdowns on every form."""
+    rows = db.query(POYarnDetail).filter(POYarnDetail.po_number == po.po_number).all()
+    return _set_yarn(po, rows)
+
+
+def attach_yarn_bulk(pos, db: Session):
+    """Same as attach_yarn but for a list — one query instead of N (avoids N+1)."""
+    if not pos:
+        return pos
+    numbers = [p.po_number for p in pos]
+    rows = db.query(POYarnDetail).filter(POYarnDetail.po_number.in_(numbers)).all()
+    by_po = {}
+    for r in rows:
+        by_po.setdefault(r.po_number, []).append(r)
+    for p in pos:
+        _set_yarn(p, by_po.get(p.po_number, []))
+    return pos
 
 
 @router.post("/", response_model=POResponse)
@@ -100,7 +111,7 @@ def list_pos(
         pos = db.query(PurchaseOrder).all()
     else:
         pos = db.query(PurchaseOrder).filter(PurchaseOrder.user_id == current_user.id).all()
-    return [attach_yarn(p, db) for p in pos]
+    return attach_yarn_bulk(pos, db)
 
 
 @router.get("/{po_number}", response_model=POResponse)
@@ -207,7 +218,7 @@ def update_po(
         create_yarn_details(db, po_number, warp_rows or [], weft_rows or [])
         db.refresh(po)
 
-    return po
+    return attach_yarn(po, db)
 
 
 @router.delete("/{po_number}")

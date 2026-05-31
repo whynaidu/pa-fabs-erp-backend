@@ -44,17 +44,19 @@ def create_return(
         submitted_by=current_user.id
     )
 
-    db.add(new_return)
-    db.commit()
-    db.refresh(new_return)
-
-    if return_data.return_type == "warping_return" and return_data.beam_entries:
-        # beam_number is globally unique (it is the FK target for loom allocations),
-        # so the running number is global, not per-cycle. Retry on the rare race.
-        for attempt in range(5):
+    # A warping return auto-generates beams. beam_number is globally unique (it is
+    # the FK target for loom allocations), so the running number is global, not
+    # per-cycle. The return + its beams are committed together (one transaction) so
+    # a beam-numbering collision can never leave an orphaned return; retry on the
+    # rare race (rollback expunges the pending rows, so re-add each attempt).
+    beam_entries = list(return_data.beam_entries) if (
+        return_data.return_type == "warping_return" and return_data.beam_entries) else []
+    for attempt in range(5):
+        db.add(new_return)
+        if beam_entries:
             base = db.query(Beam).count()
-            for idx, beam_entry in enumerate(return_data.beam_entries):
-                beam = Beam(
+            for idx, beam_entry in enumerate(beam_entries):
+                db.add(Beam(
                     id=f"beam_{uuid.uuid4().hex}",
                     po_number=return_data.po_number,
                     cycle_number=inward.cycle_number,
@@ -63,16 +65,16 @@ def create_return(
                     beam_metres=beam_entry.beam_metres,
                     quality_grade=return_data.quality_grade,
                     status=BeamStatus.AVAILABLE,
-                )
-                db.add(beam)
-            try:
-                db.commit()
-                break
-            except IntegrityError:
-                db.rollback()
-                if attempt == 4:
-                    raise HTTPException(status_code=409, detail="Could not allocate beam numbers; retry")
+                ))
+        try:
+            db.commit()
+            break
+        except IntegrityError:
+            db.rollback()
+            if attempt == 4:
+                raise HTTPException(status_code=409, detail="Could not allocate beam numbers; retry")
 
+    db.refresh(new_return)
     return new_return
 
 

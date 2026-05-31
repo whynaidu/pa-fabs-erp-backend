@@ -6,8 +6,8 @@ from backend.models.po_yarn_detail import YarnType
 
 
 class YarnRow(BaseModel):
-    count: str
-    colour: str
+    count: Optional[str] = None
+    colour: Optional[str] = None
     qty_kg: Optional[float] = None
     bundles: Optional[int] = None
 
