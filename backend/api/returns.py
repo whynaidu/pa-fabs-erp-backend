@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+import uuid
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.return_entry import ReturnEntry
@@ -26,7 +27,7 @@ def create_return(
         raise HTTPException(status_code=404, detail="No inward entry found for this PO")
 
     new_return = ReturnEntry(
-        id=f"return_{hash(return_data.po_number + str(return_data.return_type))}",
+        id=f"return_{uuid.uuid4().hex}",
         po_number=return_data.po_number,
         cycle_number=inward.cycle_number,
         return_type=return_data.return_type,
@@ -47,9 +48,6 @@ def create_return(
     db.refresh(new_return)
 
     if return_data.return_type == "warping_return" and return_data.beam_entries:
-        po = db.query(InwardEntry).filter(
-            InwardEntry.po_number == return_data.po_number
-        ).first()
         exist_beam_count = db.query(Beam).filter(
             Beam.po_number == return_data.po_number,
             Beam.cycle_number == inward.cycle_number
@@ -58,7 +56,7 @@ def create_return(
         for idx, beam_entry in enumerate(return_data.beam_entries):
             beam_number = f"B{str(exist_beam_count + idx + 1).zfill(3)}"
             beam = Beam(
-                id=f"beam_{hash(beam_number)}",
+                id=f"beam_{uuid.uuid4().hex}",
                 po_number=return_data.po_number,
                 cycle_number=inward.cycle_number,
                 return_entry_id=new_return.id,
@@ -88,7 +86,7 @@ def list_returns(
 
 
 @router.get("/{return_id}", response_model=ReturnResponse)
-def get_return(return_id: str, db: Session = Depends(get_db)):
+def get_return(return_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return_entry = db.query(ReturnEntry).filter(ReturnEntry.id == return_id).first()
     if not return_entry:
         raise HTTPException(status_code=404, detail="Return entry not found")

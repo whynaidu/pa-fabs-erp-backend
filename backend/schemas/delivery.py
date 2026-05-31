@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
+import json
 
 
 class PieceData(BaseModel):
@@ -35,6 +36,14 @@ class DeliveryResponse(DeliveryBase):
     grand_total_metres: float
     submitted_by: str
     created_at: datetime
+
+    @field_validator("pieces_data", mode="before")
+    @classmethod
+    def _parse_pieces(cls, v):
+        # The ORM stores pieces_data as a JSON string; parse it back to a list.
+        if isinstance(v, str):
+            return json.loads(v) if v else None
+        return v
 
     class Config:
         from_attributes = True

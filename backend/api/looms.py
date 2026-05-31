@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+import uuid
+from datetime import datetime
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.loom import Loom, LoomStatus
 from backend.models.loom_allocation import LoomAllocation
 from backend.models.inward import InwardEntry
-from backend.models.beam import Beam
+from backend.models.beam import Beam, BeamStatus
 from backend.schemas.loom import LoomResponse, LoomAllocationRequest, LoomAllocationResponse
 from backend.api.deps import get_current_user
 
@@ -14,13 +16,13 @@ router = APIRouter(prefix="/looms", tags=["Looms"])
 
 
 @router.get("/", response_model=List[LoomResponse])
-def list_looms(db: Session = Depends(get_db)):
+def list_looms(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     looms = db.query(Loom).order_by(Loom.loom_number).all()
     return looms
 
 
 @router.get("/free", response_model=List[LoomResponse])
-def list_free_looms(db: Session = Depends(get_db)):
+def list_free_looms(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     looms = db.query(Loom).filter(Loom.status == LoomStatus.FREE).order_by(Loom.loom_number).all()
     return looms
 
@@ -55,13 +57,13 @@ def allocate_loom(
         raise HTTPException(status_code=404, detail="Beam not found")
 
     new_allocation = LoomAllocation(
-        id=f"alloc_{hash(allocation.po_number + str(allocation.loom_number))}",
+        id=f"alloc_{uuid.uuid4().hex}",
         po_number=allocation.po_number,
         cycle_number=inward.cycle_number,
         beam_id=allocation.beam_id,
         loom_number=allocation.loom_number,
         weft_details=allocation.weft_details,
-        allocation_date=allocation.expected_done,
+        allocation_date=datetime.utcnow(),
         expected_done=allocation.expected_done,
         submitted_by=current_user.id
     )
@@ -73,7 +75,7 @@ def allocate_loom(
     loom.current_cycle = inward.cycle_number
     loom.current_beam = allocation.beam_id
     loom.allocated_by = current_user.username
-    loom.allocated_at = allocation.expected_done
+    loom.allocated_at = datetime.utcnow()
 
     beam.status = BeamStatus.ALLOCATED
 
@@ -83,7 +85,7 @@ def allocate_loom(
 
 
 @router.get("/{loom_number}", response_model=LoomResponse)
-def get_loom(loom_number: int, db: Session = Depends(get_db)):
+def get_loom(loom_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     loom = db.query(Loom).filter(Loom.loom_number == loom_number).first()
     if not loom:
         raise HTTPException(status_code=404, detail="Loom not found")

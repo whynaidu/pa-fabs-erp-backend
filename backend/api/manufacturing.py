@@ -6,10 +6,12 @@ from backend.database import get_db
 from backend.models.user import User
 from backend.models.manufacturing import ManufacturingLog
 from backend.models.loom import Loom
+from backend.models.loom_allocation import LoomAllocation
 from backend.models.po import PurchaseOrder
 from backend.schemas.manufacturing import ManufacturingCreate, ManufacturingResponse
 from backend.api.deps import get_current_user
 from datetime import datetime
+import uuid
 
 router = APIRouter(prefix="/manufacturing", tags=["Manufacturing"])
 
@@ -31,7 +33,7 @@ def create_manufacturing_log(
         ManufacturingLog.loom_number == manufacturing.loom_number
     ).scalar() or 0
 
-    new_total = prev_total + manufacturing.metres_today
+    new_total = float(prev_total) + float(manufacturing.metres_today)
     balance = None
 
     if loom.current_po:
@@ -40,7 +42,7 @@ def create_manufacturing_log(
             balance = float(po.order_qty) - new_total
 
     new_log = ManufacturingLog(
-        id=f"mfg_{hash(manufacturing.loom_number + str(manufacturing.log_date))}",
+        id=f"mfg_{uuid.uuid4().hex}",
         po_number=loom.current_po or "",
         cycle_number=loom.current_cycle or 1,
         loom_number=manufacturing.loom_number,
@@ -63,9 +65,9 @@ def create_manufacturing_log(
     db.refresh(new_log)
 
     if manufacturing.is_done:
-        allocation = db.query(backend.models.loom_allocation.LoomAllocation).filter(
-            backend.models.loom_allocation.LoomAllocation.loom_number == manufacturing.loom_number,
-            backend.models.loom_allocation.LoomAllocation.status == "active"
+        allocation = db.query(LoomAllocation).filter(
+            LoomAllocation.loom_number == manufacturing.loom_number,
+            LoomAllocation.status == "active"
         ).first()
         if allocation:
             allocation.status = "completed"
@@ -89,7 +91,7 @@ def list_manufacturing_logs(
 
 
 @router.get("/{loom_number}", response_model=List[ManufacturingResponse])
-def get_manufacturing_for_loom(loom_number: int, db: Session = Depends(get_db)):
+def get_manufacturing_for_loom(loom_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     logs = db.query(ManufacturingLog).filter(
         ManufacturingLog.loom_number == loom_number
     ).order_by(ManufacturingLog.log_date.desc()).all()

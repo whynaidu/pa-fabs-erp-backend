@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
+import uuid
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.inward import InwardEntry
@@ -38,7 +40,7 @@ def create_inward(
             )
 
     new_inward = InwardEntry(
-        id=f"inward_{hash(inward.po_number + str(max_cycle + 1))}",
+        id=f"inward_{uuid.uuid4().hex}",
         po_number=inward.po_number,
         cycle_number=max_cycle + 1,
         warp_count=inward.warp_count,
@@ -84,7 +86,7 @@ def list_inwards(
 
 
 @router.get("/{inward_id}", response_model=InwardResponse)
-def get_inward(inward_id: str, db: Session = Depends(get_db)):
+def get_inward(inward_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     inward = db.query(InwardEntry).filter(InwardEntry.id == inward_id).first()
     if not inward:
         raise HTTPException(status_code=404, detail="Inward entry not found")

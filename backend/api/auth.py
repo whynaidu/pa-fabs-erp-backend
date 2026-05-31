@@ -7,6 +7,7 @@ from backend.services.auth_service import verify_password, get_password_hash, cr
 from backend.api.deps import get_current_user
 from datetime import timedelta
 from backend.config import settings
+import uuid
 
 router = APIRouter(tags=["Authentication"])
 
@@ -23,7 +24,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
     hashed_password = get_password_hash(user.password)
     db_user = User(
-        id=f"user_{hash(user.email + str(user.created_at))}",
+        id=f"user_{uuid.uuid4().hex}",
         full_name=user.full_name,
         email=user.email,
         phone=user.phone,
@@ -50,7 +51,14 @@ def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if user.role != UserRole(user_credentials.role):
+    try:
+        requested_role = UserRole(user_credentials.role)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role",
+        )
+    if user.role != requested_role:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Role mismatch",

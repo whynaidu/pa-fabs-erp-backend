@@ -10,6 +10,7 @@ from backend.schemas.po import POCreate, POUpdate, POResponse, POYarnResponse, P
 from backend.models.inward import InwardEntry
 from backend.models.delivery import Delivery
 from backend.api.deps import get_current_user, get_current_admin
+import uuid
 
 router = APIRouter(prefix="/pos", tags=["Purchase Orders"])
 
@@ -17,25 +18,25 @@ router = APIRouter(prefix="/pos", tags=["Purchase Orders"])
 def create_yarn_details(db: Session, po_number: str, warp_rows: list, weft_rows: list):
     for row in warp_rows:
         detail = POYarnDetail(
-            id=f"yarn_{hash(po_number + str(row.count) + str(row.colour))}",
+            id=f"yarn_{uuid.uuid4().hex}",
             po_number=po_number,
             yarn_type=YarnType.WARP,
-            count=row.get("count"),
-            colour=row.get("colour"),
-            qty_kg=row.get("qty_kg"),
-            bundles=row.get("bundles")
+            count=row.count,
+            colour=row.colour,
+            qty_kg=row.qty_kg,
+            bundles=row.bundles
         )
         db.add(detail)
 
     for row in weft_rows:
         detail = POYarnDetail(
-            id=f"yarn_{hash(po_number + str(row.count) + str(row.colour) + 'weft')}",
+            id=f"yarn_{uuid.uuid4().hex}",
             po_number=po_number,
             yarn_type=YarnType.WEFT,
-            count=row.get("count"),
-            colour=row.get("colour"),
-            qty_kg=row.get("qty_kg"),
-            bundles=row.get("bundles")
+            count=row.count,
+            colour=row.colour,
+            qty_kg=row.qty_kg,
+            bundles=row.bundles
         )
         db.add(detail)
     db.commit()
@@ -97,7 +98,7 @@ def get_po(po_number: str, db: Session = Depends(get_db), current_user: User = D
 
 
 @router.get("/{po_number}/yarn", response_model=POYarnResponse)
-def get_po_yarn(po_number: str, db: Session = Depends(get_db)):
+def get_po_yarn(po_number: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).first()
     if not po:
         raise HTTPException(status_code=404, detail="PO not found")
@@ -118,7 +119,7 @@ def get_po_yarn(po_number: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{po_number}/cycles", response_model=List[POCycle])
-def get_po_cycles(po_number: str, db: Session = Depends(get_db)):
+def get_po_cycles(po_number: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).first()
     if not po:
         raise HTTPException(status_code=404, detail="PO not found")

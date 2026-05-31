@@ -100,7 +100,7 @@ def list_deliveries(
 
 
 @router.get("/{delivery_id}", response_model=DeliveryResponse)
-def get_delivery(delivery_id: str, db: Session = Depends(get_db)):
+def get_delivery(delivery_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
@@ -108,7 +108,7 @@ def get_delivery(delivery_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{delivery_id}/dc-slip", response_model=DCSlipResponse)
-def get_dc_slip(delivery_id: str, db: Session = Depends(get_db)):
+def get_dc_slip(delivery_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+import uuid
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.outward import OutwardEntry
@@ -25,7 +26,7 @@ def create_outward(
         raise HTTPException(status_code=404, detail="No inward entry found for this PO")
 
     new_outward = OutwardEntry(
-        id=f"outward_{hash(outward.po_number + outward.operator_name)}",
+        id=f"outward_{uuid.uuid4().hex}",
         po_number=outward.po_number,
         cycle_number=inward.cycle_number,
         process_type=outward.process_type,
@@ -66,7 +67,7 @@ def list_outwards(
 
 
 @router.get("/{outward_id}", response_model=OutwardResponse)
-def get_outward(outward_id: str, db: Session = Depends(get_db)):
+def get_outward(outward_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     outward = db.query(OutwardEntry).filter(OutwardEntry.id == outward_id).first()
     if not outward:
         raise HTTPException(status_code=404, detail="Outward entry not found")
