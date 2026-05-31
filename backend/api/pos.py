@@ -8,6 +8,12 @@ from backend.models.po import PurchaseOrder
 from backend.models.po_yarn_detail import POYarnDetail, YarnType
 from backend.schemas.po import POCreate, POUpdate, POResponse, POYarnResponse, POCycle
 from backend.models.inward import InwardEntry
+from backend.models.outward import OutwardEntry
+from backend.models.return_entry import ReturnEntry
+from backend.models.beam import Beam
+from backend.models.loom_allocation import LoomAllocation
+from backend.models.manufacturing import ManufacturingLog
+from backend.models.inventory import Inventory
 from backend.models.delivery import Delivery
 from backend.api.deps import get_current_user, get_current_admin
 import uuid
@@ -134,6 +140,28 @@ def get_po_cycles(po_number: str, db: Session = Depends(get_db), current_user: U
         cycles.append(POCycle(cycle_number=inward.cycle_number, has_delivery=has_delivery))
 
     return sorted(cycles, key=lambda x: x.cycle_number)
+
+
+@router.get("/{po_number}/timeline")
+def get_po_timeline(po_number: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    """Full per-cycle timeline for a PO (admin only)."""
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).first()
+    if not po:
+        raise HTTPException(status_code=404, detail="PO not found")
+    cols = lambda r: {c.name: getattr(r, c.name) for c in r.__table__.columns}
+    cycles = {}
+    for model, key in [(InwardEntry, "inward"), (OutwardEntry, "outwards"), (ReturnEntry, "returns"),
+                       (Beam, "beams"), (LoomAllocation, "allocations"), (ManufacturingLog, "manufacturing"),
+                       (Inventory, "inventory"), (Delivery, "delivery")]:
+        for r in db.query(model).filter(model.po_number == po_number).all():
+            cyc = cycles.setdefault(r.cycle_number, {})
+            if key in ("inward", "delivery"):
+                cyc[key] = cols(r)
+            else:
+                cyc.setdefault(key, []).append(cols(r))
+    return {"po_number": po_number, "cycles": [
+        {"cycle_number": n, **cycles[n]} for n in sorted(cycles)
+    ]}
 
 
 @router.put("/{po_number}", response_model=POResponse)

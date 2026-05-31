@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import settings
 from backend.models import *
-from backend.api import auth, pos, inward, outward, returns, looms, manufacturing, deliveries, admin, beams, inventory
+from backend.api import auth, pos, inward, outward, returns, looms, manufacturing, deliveries, admin, beams, inventory, dashboard, export
 
 app = FastAPI(
     title="PA FABS Textile ERP API",
@@ -32,6 +32,8 @@ app.include_router(deliveries.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(beams.router, prefix="/api")
 app.include_router(inventory.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
+app.include_router(export.router, prefix="/api")
 
 
 @app.on_event("startup")

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.loom import Loom, LoomStatus
-from backend.models.loom_allocation import LoomAllocation
+from backend.models.loom_allocation import LoomAllocation, AllocationStatus
 from backend.models.inward import InwardEntry
 from backend.models.beam import Beam, BeamStatus
 from backend.schemas.loom import LoomResponse, LoomAllocationRequest, LoomAllocationResponse
@@ -87,6 +87,45 @@ def allocate_loom(
 @router.get("/allocations", response_model=List[LoomAllocationResponse])
 def list_allocations(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return db.query(LoomAllocation).order_by(LoomAllocation.created_at.desc()).all()
+
+
+@router.get("/allocations/po/{po_number}/cycle/{cycle_number}", response_model=List[LoomAllocationResponse])
+def allocations_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(LoomAllocation).filter(
+        LoomAllocation.po_number == po_number, LoomAllocation.cycle_number == cycle_number
+    ).all()
+
+
+@router.get("/allocations/{alloc_id}", response_model=LoomAllocationResponse)
+def get_allocation(alloc_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    alloc = db.query(LoomAllocation).filter(LoomAllocation.id == alloc_id).first()
+    if not alloc:
+        raise HTTPException(status_code=404, detail="Allocation not found")
+    return alloc
+
+
+@router.patch("/allocations/{alloc_id}/status", response_model=LoomAllocationResponse)
+def update_allocation_status(alloc_id: str, status: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Update an allocation's status (active / completed / cancelled). Putting it
+    on hold parks the loom (on-hold); reactivating re-occupies it. The loom is
+    only freed by a delivery, never here."""
+    alloc = db.query(LoomAllocation).filter(LoomAllocation.id == alloc_id).first()
+    if not alloc:
+        raise HTTPException(status_code=404, detail="Allocation not found")
+    try:
+        new_status = AllocationStatus(status)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid status (active/completed/cancelled)")
+    alloc.status = new_status
+    loom = db.query(Loom).filter(Loom.loom_number == alloc.loom_number).first()
+    if loom and loom.status != LoomStatus.FREE:
+        if status == "hold" or new_status == AllocationStatus.CANCELLED:
+            loom.status = LoomStatus.ON_HOLD
+        elif new_status == AllocationStatus.ACTIVE:
+            loom.status = LoomStatus.OCCUPIED
+    db.commit()
+    db.refresh(alloc)
+    return alloc
 
 
 @router.get("/{loom_number}", response_model=LoomResponse)
