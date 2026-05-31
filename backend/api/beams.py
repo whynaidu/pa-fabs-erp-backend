@@ -20,6 +20,18 @@ def list_free_beams(db: Session = Depends(get_db), current_user: User = Depends(
     return db.query(Beam).filter(Beam.status == BeamStatus.AVAILABLE).all()
 
 
+@router.get("/po/{po_number}/cycle/{cycle_number}", response_model=List[BeamResponse])
+def beams_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(Beam).filter(
+        Beam.po_number == po_number, Beam.cycle_number == cycle_number
+    ).all()
+
+
+@router.get("/available", response_model=List[BeamResponse])
+def list_available_beams(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(Beam).filter(Beam.status == BeamStatus.AVAILABLE).all()
+
+
 @router.get("/{beam_id}", response_model=BeamResponse)
 def get_beam(beam_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     beam = db.query(Beam).filter(Beam.id == beam_id).first()

@@ -66,9 +66,27 @@ def list_outwards(
     return outwards
 
 
+@router.get("/po/{po_number}/cycle/{cycle_number}", response_model=List[OutwardResponse])
+def outwards_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(OutwardEntry).filter(
+        OutwardEntry.po_number == po_number, OutwardEntry.cycle_number == cycle_number
+    ).all()
+
+
 @router.get("/{outward_id}", response_model=OutwardResponse)
 def get_outward(outward_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     outward = db.query(OutwardEntry).filter(OutwardEntry.id == outward_id).first()
     if not outward:
         raise HTTPException(status_code=404, detail="Outward entry not found")
+    return outward
+
+
+@router.patch("/{outward_id}/done", response_model=OutwardResponse)
+def mark_outward_done(outward_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    outward = db.query(OutwardEntry).filter(OutwardEntry.id == outward_id).first()
+    if not outward:
+        raise HTTPException(status_code=404, detail="Outward entry not found")
+    outward.is_done = True
+    db.commit()
+    db.refresh(outward)
     return outward

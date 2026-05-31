@@ -6,13 +6,40 @@ from backend.models.user import User
 from backend.models.delivery import Delivery
 from backend.models.inward import InwardEntry
 from backend.models.loom import Loom, LoomStatus
-from backend.models.loom_allocation import LoomAllocation
+from backend.models.loom_allocation import LoomAllocation, AllocationStatus
+from backend.models.inventory import Inventory
 from backend.models.po import PurchaseOrder
+from backend.models.user import UserRole
 from backend.schemas.delivery import DeliveryCreate, DeliveryResponse, DCSlipResponse
 from backend.api.deps import get_current_user
 import json
+import uuid
 
 router = APIRouter(prefix="/deliveries", tags=["Deliveries"])
+
+
+def _delivery_readiness(db: Session, po_number: str, cycle_number: int) -> dict:
+    """A PO+cycle is deliverable when every loom allocation for it is completed
+    and a finished-fabric (inventory) record exists for each. Direct flows with
+    no allocations fall back to whatever pieces the caller supplies."""
+    allocations = db.query(LoomAllocation).filter(
+        LoomAllocation.po_number == po_number,
+        LoomAllocation.cycle_number == cycle_number,
+    ).all()
+    inventory = db.query(Inventory).filter(
+        Inventory.po_number == po_number,
+        Inventory.cycle_number == cycle_number,
+    ).all()
+    reasons = []
+    pending = [a.loom_number for a in allocations if a.status != AllocationStatus.COMPLETED]
+    if pending:
+        reasons.append(f"Weaving not complete on looms: {pending}")
+    if allocations and not inventory:
+        reasons.append("No finished-fabric (inventory) records for this cycle")
+    if db.query(Delivery).filter(Delivery.po_number == po_number, Delivery.cycle_number == cycle_number).first():
+        reasons.append("Delivery already exists for this PO+cycle")
+    return {"ready": len(reasons) == 0, "reasons": reasons,
+            "allocation_count": len(allocations), "inventory_count": len(inventory)}
 
 
 @router.post("/", response_model=DeliveryResponse)
@@ -32,24 +59,53 @@ def create_delivery(
     if not inward:
         raise HTTPException(status_code=404, detail="No inward entry found for this PO")
 
-    total_metres = sum([p.metres for p in (delivery.pieces_data or [])])
-    no_pieces = len(delivery.pieces_data or [])
+    cycle_number = inward.cycle_number
+
+    # One delivery per PO+cycle (full only).
+    if db.query(Delivery).filter(
+        Delivery.po_number == delivery.po_number,
+        Delivery.cycle_number == cycle_number,
+    ).first():
+        raise HTTPException(status_code=400, detail="Delivery already exists for this PO+cycle")
+
+    # Block delivery until weaving is complete on every allocated loom for the cycle.
+    ready = _delivery_readiness(db, delivery.po_number, cycle_number)
+    if not ready["ready"] and ready["allocation_count"] > 0:
+        raise HTTPException(status_code=400, detail="; ".join(ready["reasons"]))
+
+    # Spec: pieces are auto-built from inventory_inward; manual pieces are a
+    # fallback for direct flows with no finished-fabric records yet.
+    inventory = db.query(Inventory).filter(
+        Inventory.po_number == delivery.po_number,
+        Inventory.cycle_number == cycle_number,
+    ).all()
+    if inventory:
+        pieces = [{
+            "piece_no": str(i + 1),
+            "loom_no": r.loom_number,
+            "beam_id": r.beam_id,
+            "metres": float(r.fabric_metres),
+        } for i, r in enumerate(inventory)]
+    else:
+        pieces = [p.dict() for p in (delivery.pieces_data or [])]
+
+    total_metres = sum(p["metres"] for p in pieces)
+    no_pieces = len(pieces)
+    pieces_json = json.dumps(pieces) if pieces else None
 
     dc_count = db.query(Delivery).count() + 1
     dc_number = f"DC-{str(dc_count).zfill(4)}"
 
-    pieces_json = json.dumps([p.dict() for p in (delivery.pieces_data or [])]) if delivery.pieces_data else None
-
     new_delivery = Delivery(
-        id=f"delivery_{hash(dc_number)}",
+        id=f"delivery_{uuid.uuid4().hex}",
         po_number=delivery.po_number,
-        cycle_number=inward.cycle_number,
+        cycle_number=cycle_number,
         dc_number=dc_number,
         delivery_date=delivery.delivery_date,
         customer_name=delivery.customer_name,
         design_no=delivery.design_no,
-        reed_pick=delivery.reed_pick,
-        description=delivery.description,
+        reed_pick=delivery.reed_pick or (f"{po.reed}x{po.pick}" if po.reed and po.pick else None),
+        description=delivery.description or po.description,
         pieces_data=pieces_json,
         no_pieces=no_pieces,
         grand_total_metres=total_metres,
@@ -66,7 +122,7 @@ def create_delivery(
 
     allocations = db.query(LoomAllocation).filter(
         LoomAllocation.po_number == delivery.po_number,
-        LoomAllocation.cycle_number == inward.cycle_number
+        LoomAllocation.cycle_number == cycle_number
     ).all()
 
     for alloc in allocations:
@@ -97,6 +153,19 @@ def list_deliveries(
             Delivery.submitted_by == current_user.id
         ).order_by(Delivery.delivery_date.desc()).all()
     return deliveries
+
+
+@router.get("/po/{po_number}/cycle/{cycle_number}/ready")
+def delivery_ready(po_number: str, cycle_number: int, db: Session = Depends(get_db),
+                   current_user: User = Depends(get_current_user)):
+    return _delivery_readiness(db, po_number, cycle_number)
+
+
+@router.get("/po/{po_number}", response_model=List[DeliveryResponse])
+def deliveries_for_po(po_number: str, db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_user)):
+    return db.query(Delivery).filter(Delivery.po_number == po_number).order_by(
+        Delivery.cycle_number).all()
 
 
 @router.get("/{delivery_id}", response_model=DeliveryResponse)

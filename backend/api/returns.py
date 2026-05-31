@@ -85,6 +85,13 @@ def list_returns(
     return returns
 
 
+@router.get("/po/{po_number}/cycle/{cycle_number}", response_model=List[ReturnResponse])
+def returns_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(ReturnEntry).filter(
+        ReturnEntry.po_number == po_number, ReturnEntry.cycle_number == cycle_number
+    ).all()
+
+
 @router.get("/{return_id}", response_model=ReturnResponse)
 def get_return(return_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return_entry = db.query(ReturnEntry).filter(ReturnEntry.id == return_id).first()

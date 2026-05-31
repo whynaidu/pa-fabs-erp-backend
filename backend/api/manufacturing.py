@@ -90,7 +90,33 @@ def list_manufacturing_logs(
     return logs
 
 
-@router.get("/{loom_number}", response_model=List[ManufacturingResponse])
+@router.get("/po/{po_number}/cycle/{cycle_number}", response_model=List[ManufacturingResponse])
+def manufacturing_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(ManufacturingLog).filter(
+        ManufacturingLog.po_number == po_number, ManufacturingLog.cycle_number == cycle_number
+    ).order_by(ManufacturingLog.log_date.desc()).all()
+
+
+@router.patch("/{mfg_id}/done", response_model=ManufacturingResponse)
+def mark_manufacturing_done(mfg_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Mark weaving complete on this log's loom. The loom allocation is closed,
+    but the loom stays Occupied until the delivery for the PO+cycle is saved."""
+    log = db.query(ManufacturingLog).filter(ManufacturingLog.id == mfg_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Manufacturing log not found")
+    log.is_done = True
+    allocation = db.query(LoomAllocation).filter(
+        LoomAllocation.loom_number == log.loom_number,
+        LoomAllocation.status == "active",
+    ).first()
+    if allocation:
+        allocation.status = "completed"
+    db.commit()
+    db.refresh(log)
+    return log
+
+
+@router.get("/loom/{loom_number}", response_model=List[ManufacturingResponse])
 def get_manufacturing_for_loom(loom_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     logs = db.query(ManufacturingLog).filter(
         ManufacturingLog.loom_number == loom_number

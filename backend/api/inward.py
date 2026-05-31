@@ -85,9 +85,51 @@ def list_inwards(
     return inwards
 
 
+@router.get("/po/{po_number}", response_model=List[InwardResponse])
+def inwards_for_po(po_number: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(InwardEntry).filter(InwardEntry.po_number == po_number).order_by(InwardEntry.cycle_number).all()
+
+
+@router.get("/po/{po_number}/cycle/{cycle_number}", response_model=List[InwardResponse])
+def inwards_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(InwardEntry).filter(
+        InwardEntry.po_number == po_number, InwardEntry.cycle_number == cycle_number
+    ).all()
+
+
+@router.get("/po/{po_number}/can-start")
+def can_start_cycle(po_number: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Cycle guard: a new inward (cycle N+1) is allowed only when the previous
+    cycle has a completed delivery. First cycle is always allowed."""
+    max_cycle = db.query(func.max(InwardEntry.cycle_number)).filter(
+        InwardEntry.po_number == po_number
+    ).scalar() or 0
+    if max_cycle == 0:
+        return {"can_start": True, "next_cycle": 1, "reason": None}
+    delivered = db.query(Delivery).filter(
+        Delivery.po_number == po_number, Delivery.cycle_number == max_cycle
+    ).first() is not None
+    return {
+        "can_start": delivered,
+        "next_cycle": max_cycle + 1 if delivered else max_cycle,
+        "reason": None if delivered else f"Cycle {max_cycle} delivery not complete",
+    }
+
+
 @router.get("/{inward_id}", response_model=InwardResponse)
 def get_inward(inward_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     inward = db.query(InwardEntry).filter(InwardEntry.id == inward_id).first()
     if not inward:
         raise HTTPException(status_code=404, detail="Inward entry not found")
+    return inward
+
+
+@router.patch("/{inward_id}/done", response_model=InwardResponse)
+def mark_inward_done(inward_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    inward = db.query(InwardEntry).filter(InwardEntry.id == inward_id).first()
+    if not inward:
+        raise HTTPException(status_code=404, detail="Inward entry not found")
+    inward.is_done = True
+    db.commit()
+    db.refresh(inward)
     return inward
