@@ -84,6 +84,11 @@ def allocate_loom(
     return new_allocation
 
 
+@router.get("/allocations", response_model=List[LoomAllocationResponse])
+def list_allocations(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(LoomAllocation).order_by(LoomAllocation.created_at.desc()).all()
+
+
 @router.get("/{loom_number}", response_model=LoomResponse)
 def get_loom(loom_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     loom = db.query(Loom).filter(Loom.loom_number == loom_number).first()
