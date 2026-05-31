@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.loom import Loom, LoomStatus
@@ -63,7 +63,7 @@ def allocate_loom(
         beam_id=allocation.beam_id,
         loom_number=allocation.loom_number,
         weft_details=allocation.weft_details,
-        allocation_date=datetime.utcnow(),
+        allocation_date=datetime.now(timezone.utc),
         expected_done=allocation.expected_done,
         submitted_by=current_user.id
     )
@@ -74,8 +74,8 @@ def allocate_loom(
     loom.current_po = allocation.po_number
     loom.current_cycle = inward.cycle_number
     loom.current_beam = allocation.beam_id
-    loom.allocated_by = current_user.username
-    loom.allocated_at = datetime.utcnow()
+    loom.allocated_by = current_user.id
+    loom.allocated_at = datetime.now(timezone.utc)
 
     beam.status = BeamStatus.ALLOCATED
 

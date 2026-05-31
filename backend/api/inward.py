@@ -6,7 +6,7 @@ import uuid
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.inward import InwardEntry
-from backend.models.po import PurchaseOrder
+from backend.models.po import PurchaseOrder, POStatus
 from backend.models.delivery import Delivery
 from backend.schemas.inward import InwardCreate, InwardResponse
 from backend.api.deps import get_current_user
@@ -65,7 +65,7 @@ def create_inward(
     db.commit()
     db.refresh(new_inward)
 
-    po.status = "in_progress"
+    po.status = POStatus.IN_PROGRESS
     db.commit()
 
     return new_inward

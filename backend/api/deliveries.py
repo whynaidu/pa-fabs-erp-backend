@@ -8,7 +8,7 @@ from backend.models.inward import InwardEntry
 from backend.models.loom import Loom, LoomStatus
 from backend.models.loom_allocation import LoomAllocation, AllocationStatus
 from backend.models.inventory import Inventory
-from backend.models.po import PurchaseOrder
+from backend.models.po import PurchaseOrder, POStatus
 from backend.models.user import UserRole
 from backend.schemas.delivery import DeliveryCreate, DeliveryResponse, DCSlipResponse
 from backend.api.deps import get_current_user
@@ -34,8 +34,11 @@ def _delivery_readiness(db: Session, po_number: str, cycle_number: int) -> dict:
     pending = [a.loom_number for a in allocations if a.status != AllocationStatus.COMPLETED]
     if pending:
         reasons.append(f"Weaving not complete on looms: {pending}")
-    if allocations and not inventory:
-        reasons.append("No finished-fabric (inventory) records for this cycle")
+    # Require a finished-fabric record for every allocated loom, not just one.
+    inv_looms = {r.loom_number for r in inventory}
+    missing_inv = [a.loom_number for a in allocations if a.loom_number not in inv_looms]
+    if missing_inv:
+        reasons.append(f"No finished-fabric (inventory) records for looms: {missing_inv}")
     if db.query(Delivery).filter(Delivery.po_number == po_number, Delivery.cycle_number == cycle_number).first():
         reasons.append("Delivery already exists for this PO+cycle")
     return {"ready": len(reasons) == 0, "reasons": reasons,
@@ -87,11 +90,14 @@ def create_delivery(
             "metres": float(r.fabric_metres),
         } for i, r in enumerate(inventory)]
     else:
-        pieces = [p.dict() for p in (delivery.pieces_data or [])]
+        pieces = [p.model_dump() for p in (delivery.pieces_data or [])]
+
+    if not pieces:
+        raise HTTPException(status_code=400, detail="Delivery has no pieces (no finished fabric recorded and none supplied)")
 
     total_metres = sum(p["metres"] for p in pieces)
     no_pieces = len(pieces)
-    pieces_json = json.dumps(pieces) if pieces else None
+    pieces_json = json.dumps(pieces)
 
     dc_count = db.query(Delivery).count() + 1
     dc_number = f"DC-{str(dc_count).zfill(4)}"
@@ -117,14 +123,14 @@ def create_delivery(
     )
 
     db.add(new_delivery)
-    db.commit()
-    db.refresh(new_delivery)
 
+    # Free every loom used by this PO+cycle — the only event that releases the
+    # global lock. Done in the SAME transaction as the delivery insert so the
+    # lock can never leak on partial failure.
     allocations = db.query(LoomAllocation).filter(
         LoomAllocation.po_number == delivery.po_number,
         LoomAllocation.cycle_number == cycle_number
     ).all()
-
     for alloc in allocations:
         loom = db.query(Loom).filter(Loom.loom_number == alloc.loom_number).first()
         if loom:
@@ -135,8 +141,9 @@ def create_delivery(
             loom.allocated_by = None
             loom.allocated_at = None
 
-    po.status = "complete"
+    po.status = POStatus.COMPLETE
     db.commit()
+    db.refresh(new_delivery)
 
     return new_delivery
 

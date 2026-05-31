@@ -5,8 +5,8 @@ from sqlalchemy import func
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.manufacturing import ManufacturingLog
-from backend.models.loom import Loom
-from backend.models.loom_allocation import LoomAllocation
+from backend.models.loom import Loom, LoomStatus
+from backend.models.loom_allocation import LoomAllocation, AllocationStatus
 from backend.models.po import PurchaseOrder
 from backend.schemas.manufacturing import ManufacturingCreate, ManufacturingResponse
 from backend.api.deps import get_current_user
@@ -26,7 +26,7 @@ def create_manufacturing_log(
     if not loom:
         raise HTTPException(status_code=404, detail="Loom not found")
 
-    if loom.status != "occupied":
+    if loom.status != LoomStatus.OCCUPIED:
         raise HTTPException(status_code=400, detail="Loom is not occupied")
 
     prev_total = db.query(func.sum(ManufacturingLog.metres_today)).filter(
@@ -67,10 +67,10 @@ def create_manufacturing_log(
     if manufacturing.is_done:
         allocation = db.query(LoomAllocation).filter(
             LoomAllocation.loom_number == manufacturing.loom_number,
-            LoomAllocation.status == "active"
+            LoomAllocation.status == AllocationStatus.ACTIVE
         ).first()
         if allocation:
-            allocation.status = "completed"
+            allocation.status = AllocationStatus.COMPLETED
             db.commit()
 
     return new_log
@@ -107,10 +107,10 @@ def mark_manufacturing_done(mfg_id: str, db: Session = Depends(get_db), current_
     log.is_done = True
     allocation = db.query(LoomAllocation).filter(
         LoomAllocation.loom_number == log.loom_number,
-        LoomAllocation.status == "active",
+        LoomAllocation.status == AllocationStatus.ACTIVE,
     ).first()
     if allocation:
-        allocation.status = "completed"
+        allocation.status = AllocationStatus.COMPLETED
     db.commit()
     db.refresh(log)
     return log
