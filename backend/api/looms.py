@@ -10,7 +10,7 @@ from backend.models.loom_allocation import LoomAllocation, AllocationStatus
 from backend.models.inward import InwardEntry
 from backend.models.beam import Beam, BeamStatus
 from backend.schemas.loom import LoomResponse, LoomAllocationRequest, LoomAllocationResponse
-from backend.api.deps import get_current_user
+from backend.api.deps import get_current_user, require_po_access
 
 router = APIRouter(prefix="/looms", tags=["Looms"])
 
@@ -91,6 +91,7 @@ def list_allocations(db: Session = Depends(get_db), current_user: User = Depends
 
 @router.get("/allocations/po/{po_number}/cycle/{cycle_number}", response_model=List[LoomAllocationResponse])
 def allocations_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_po_access(po_number, db, current_user)
     return db.query(LoomAllocation).filter(
         LoomAllocation.po_number == po_number, LoomAllocation.cycle_number == cycle_number
     ).all()

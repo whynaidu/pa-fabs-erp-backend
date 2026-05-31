@@ -8,7 +8,7 @@ from backend.models.inventory import Inventory
 from backend.models.loom import Loom
 from backend.models.po import PurchaseOrder
 from backend.schemas.inventory import InventoryCreate, InventoryResponse
-from backend.api.deps import get_current_user
+from backend.api.deps import get_current_user, require_po_access
 
 router = APIRouter(prefix="/inventory-inward", tags=["Inventory Inward"])
 
@@ -73,6 +73,7 @@ def inventory_for_cycle(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    require_po_access(po_number, db, current_user)
     return db.query(Inventory).filter(
         Inventory.po_number == po_number,
         Inventory.cycle_number == cycle_number,

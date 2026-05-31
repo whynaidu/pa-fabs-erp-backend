@@ -15,7 +15,7 @@ from backend.models.loom_allocation import LoomAllocation
 from backend.models.manufacturing import ManufacturingLog
 from backend.models.inventory import Inventory
 from backend.models.delivery import Delivery
-from backend.api.deps import get_current_user, get_current_admin
+from backend.api.deps import get_current_user, get_current_admin, require_po_access
 import uuid
 
 router = APIRouter(prefix="/pos", tags=["Purchase Orders"])
@@ -105,6 +105,7 @@ def get_po(po_number: str, db: Session = Depends(get_db), current_user: User = D
 
 @router.get("/{po_number}/yarn", response_model=POYarnResponse)
 def get_po_yarn(po_number: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_po_access(po_number, db, current_user)
     po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).first()
     if not po:
         raise HTTPException(status_code=404, detail="PO not found")
@@ -126,6 +127,7 @@ def get_po_yarn(po_number: str, db: Session = Depends(get_db), current_user: Use
 
 @router.get("/{po_number}/cycles", response_model=List[POCycle])
 def get_po_cycles(po_number: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_po_access(po_number, db, current_user)
     po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).first()
     if not po:
         raise HTTPException(status_code=404, detail="PO not found")

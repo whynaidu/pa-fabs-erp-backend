@@ -9,7 +9,7 @@ from backend.models.loom import Loom, LoomStatus
 from backend.models.loom_allocation import LoomAllocation, AllocationStatus
 from backend.models.po import PurchaseOrder
 from backend.schemas.manufacturing import ManufacturingCreate, ManufacturingResponse
-from backend.api.deps import get_current_user
+from backend.api.deps import get_current_user, require_po_access
 from datetime import datetime
 import uuid
 
@@ -92,6 +92,7 @@ def list_manufacturing_logs(
 
 @router.get("/po/{po_number}/cycle/{cycle_number}", response_model=List[ManufacturingResponse])
 def manufacturing_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_po_access(po_number, db, current_user)
     return db.query(ManufacturingLog).filter(
         ManufacturingLog.po_number == po_number, ManufacturingLog.cycle_number == cycle_number
     ).order_by(ManufacturingLog.log_date.desc()).all()

@@ -11,7 +11,7 @@ from backend.models.inventory import Inventory
 from backend.models.po import PurchaseOrder, POStatus
 from backend.models.user import UserRole
 from backend.schemas.delivery import DeliveryCreate, DeliveryResponse, DCSlipResponse
-from backend.api.deps import get_current_user
+from backend.api.deps import get_current_user, get_current_admin, require_po_access
 import json
 import uuid
 
@@ -165,12 +165,14 @@ def list_deliveries(
 @router.get("/po/{po_number}/cycle/{cycle_number}/ready")
 def delivery_ready(po_number: str, cycle_number: int, db: Session = Depends(get_db),
                    current_user: User = Depends(get_current_user)):
+    require_po_access(po_number, db, current_user)
     return _delivery_readiness(db, po_number, cycle_number)
 
 
 @router.get("/po/{po_number}", response_model=List[DeliveryResponse])
 def deliveries_for_po(po_number: str, db: Session = Depends(get_db),
                       current_user: User = Depends(get_current_user)):
+    require_po_access(po_number, db, current_user)
     return db.query(Delivery).filter(Delivery.po_number == po_number).order_by(
         Delivery.cycle_number).all()
 
@@ -184,7 +186,7 @@ def get_delivery(delivery_id: str, db: Session = Depends(get_db), current_user: 
 
 
 @router.get("/{delivery_id}/dc-slip", response_model=DCSlipResponse)
-def get_dc_slip(delivery_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_dc_slip(delivery_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
     delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")

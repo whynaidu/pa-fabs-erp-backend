@@ -9,7 +9,7 @@ from backend.models.inward import InwardEntry
 from backend.models.po import PurchaseOrder, POStatus
 from backend.models.delivery import Delivery
 from backend.schemas.inward import InwardCreate, InwardResponse
-from backend.api.deps import get_current_user
+from backend.api.deps import get_current_user, require_po_access
 
 router = APIRouter(prefix="/inwards", tags=["Inward Entries"])
 
@@ -87,11 +87,13 @@ def list_inwards(
 
 @router.get("/po/{po_number}", response_model=List[InwardResponse])
 def inwards_for_po(po_number: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_po_access(po_number, db, current_user)
     return db.query(InwardEntry).filter(InwardEntry.po_number == po_number).order_by(InwardEntry.cycle_number).all()
 
 
 @router.get("/po/{po_number}/cycle/{cycle_number}", response_model=List[InwardResponse])
 def inwards_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_po_access(po_number, db, current_user)
     return db.query(InwardEntry).filter(
         InwardEntry.po_number == po_number, InwardEntry.cycle_number == cycle_number
     ).all()
@@ -101,6 +103,7 @@ def inwards_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(g
 def can_start_cycle(po_number: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Cycle guard: a new inward (cycle N+1) is allowed only when the previous
     cycle has a completed delivery. First cycle is always allowed."""
+    require_po_access(po_number, db, current_user)
     max_cycle = db.query(func.max(InwardEntry.cycle_number)).filter(
         InwardEntry.po_number == po_number
     ).scalar() or 0

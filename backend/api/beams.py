@@ -5,7 +5,7 @@ from backend.database import get_db
 from backend.models.user import User
 from backend.models.beam import Beam, BeamStatus
 from backend.schemas.beam import BeamResponse
-from backend.api.deps import get_current_user
+from backend.api.deps import get_current_user, require_po_access
 
 router = APIRouter(prefix="/beams", tags=["Beams"])
 
@@ -22,6 +22,7 @@ def list_free_beams(db: Session = Depends(get_db), current_user: User = Depends(
 
 @router.get("/po/{po_number}/cycle/{cycle_number}", response_model=List[BeamResponse])
 def beams_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_po_access(po_number, db, current_user)
     return db.query(Beam).filter(
         Beam.po_number == po_number, Beam.cycle_number == cycle_number
     ).all()

@@ -7,7 +7,7 @@ from backend.models.user import User
 from backend.models.outward import OutwardEntry
 from backend.models.inward import InwardEntry
 from backend.schemas.outward import OutwardCreate, OutwardResponse
-from backend.api.deps import get_current_user
+from backend.api.deps import get_current_user, require_po_access
 
 router = APIRouter(prefix="/outwards", tags=["Outward Entries"])
 
@@ -68,6 +68,7 @@ def list_outwards(
 
 @router.get("/po/{po_number}/cycle/{cycle_number}", response_model=List[OutwardResponse])
 def outwards_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_po_access(po_number, db, current_user)
     return db.query(OutwardEntry).filter(
         OutwardEntry.po_number == po_number, OutwardEntry.cycle_number == cycle_number
     ).all()

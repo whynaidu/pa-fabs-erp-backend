@@ -9,6 +9,17 @@ from typing import Optional
 security = HTTPBearer()
 
 
+def require_po_access(po_number: str, db: Session, current_user: User) -> None:
+    """Non-admins may only access POs they own (spec: 'Users see own POs only').
+    Admins have full visibility. Unknown POs are left to the endpoint's own 404."""
+    if current_user.role == UserRole.ADMIN:
+        return
+    from backend.models.po import PurchaseOrder
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == po_number).first()
+    if po is not None and po.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this PO")
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)

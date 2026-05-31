@@ -8,7 +8,7 @@ from backend.models.return_entry import ReturnEntry
 from backend.models.inward import InwardEntry
 from backend.models.beam import Beam, BeamStatus
 from backend.schemas.return_entry import ReturnCreate, ReturnResponse
-from backend.api.deps import get_current_user
+from backend.api.deps import get_current_user, require_po_access
 
 router = APIRouter(prefix="/returns", tags=["Return Entries"])
 
@@ -87,6 +87,7 @@ def list_returns(
 
 @router.get("/po/{po_number}/cycle/{cycle_number}", response_model=List[ReturnResponse])
 def returns_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_po_access(po_number, db, current_user)
     return db.query(ReturnEntry).filter(
         ReturnEntry.po_number == po_number, ReturnEntry.cycle_number == cycle_number
     ).all()
