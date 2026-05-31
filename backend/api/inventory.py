@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List
 import uuid
 from backend.database import get_db
@@ -51,7 +52,11 @@ def create_inventory(
         submitted_by=current_user.id,
     )
     db.add(record)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Finished fabric already recorded for this loom in this cycle")
     db.refresh(record)
     return record
 

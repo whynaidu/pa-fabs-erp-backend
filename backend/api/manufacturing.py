@@ -101,11 +101,14 @@ def create_manufacturing_log(
         ).first()
         if allocation:
             allocation.status = AllocationStatus.COMPLETED
-        _ensure_inventory_from_log(db, new_log, current_user.id)
+        db.commit()   # persist is_done + allocation first (must not be lost to a race)
+        # Receive fabric into inventory as a separate, best-effort step so a duplicate
+        # (concurrent done) can't roll back the primary state above.
         try:
+            _ensure_inventory_from_log(db, new_log, current_user.id)
             db.commit()
         except IntegrityError:
-            db.rollback()   # inventory already received for this loom/cycle (race) — log is saved
+            db.rollback()   # inventory already received for this loom/cycle (race)
 
     return new_log
 
@@ -147,8 +150,9 @@ def mark_manufacturing_done(mfg_id: str, db: Session = Depends(get_db), current_
     ).first()
     if allocation:
         allocation.status = AllocationStatus.COMPLETED
-    _ensure_inventory_from_log(db, log, current_user.id)
+    db.commit()   # persist is_done + allocation first (must not be lost to a race)
     try:
+        _ensure_inventory_from_log(db, log, current_user.id)
         db.commit()
     except IntegrityError:
         db.rollback()   # inventory already received for this loom/cycle (race)
