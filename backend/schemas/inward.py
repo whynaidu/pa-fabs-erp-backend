@@ -1,7 +1,9 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, field_validator
+from typing import Optional, List
 from datetime import datetime
+import json
 from backend.models.inward import NextProcess
+from backend.schemas.po import YarnRow
 
 
 class InwardBase(BaseModel):
@@ -18,6 +20,8 @@ class InwardBase(BaseModel):
     cone_bag_count: Optional[int] = None
     next_process: Optional[NextProcess] = None
     location: Optional[str] = None
+    warp_rows: Optional[List[YarnRow]] = None
+    weft_rows: Optional[List[YarnRow]] = None
     cost: Optional[float] = None
     received_by: Optional[str] = None
     is_done: bool = False
@@ -33,6 +37,14 @@ class InwardResponse(InwardBase):
     cycle_number: int
     submitted_by: str
     created_at: datetime
+
+    @field_validator("warp_rows", "weft_rows", mode="before")
+    @classmethod
+    def _parse_rows(cls, v):
+        # The ORM stores warp_rows/weft_rows as a JSON string; parse it back to a list.
+        if isinstance(v, str):
+            return json.loads(v) if v else None
+        return v
 
     class Config:
         from_attributes = True

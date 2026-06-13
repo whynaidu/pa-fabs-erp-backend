@@ -23,6 +23,8 @@ _NEW_COLUMNS = [
     ("purchase_orders", "total_ends", "INTEGER"),
     ("purchase_orders", "shortage_percentage", "NUMERIC(5,2)"),
     ("inward_entries", "location", "VARCHAR(120)"),
+    ("inward_entries", "warp_rows", "TEXT"),
+    ("inward_entries", "weft_rows", "TEXT"),
     ("deliveries", "total_weight", "NUMERIC(10,2)"),
 ]
 

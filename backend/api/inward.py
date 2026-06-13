@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
 import uuid
+import json
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.inward import InwardEntry
@@ -55,6 +56,8 @@ def create_inward(
         cone_bag_count=inward.cone_bag_count,
         next_process=inward.next_process,
         location=inward.location,
+        warp_rows=json.dumps([r.model_dump() for r in inward.warp_rows]) if inward.warp_rows else None,
+        weft_rows=json.dumps([r.model_dump() for r in inward.weft_rows]) if inward.weft_rows else None,
         cost=inward.cost,
         received_by=inward.received_by,
         is_done=inward.is_done,

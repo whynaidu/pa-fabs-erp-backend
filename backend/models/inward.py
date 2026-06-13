@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Numeric, Integer, DateTime, ForeignKey, Boolean, Enum as SQLEnum
+from sqlalchemy import Column, String, Numeric, Integer, DateTime, ForeignKey, Boolean, Text, Enum as SQLEnum
 from sqlalchemy.sql import func
 from backend.database import Base
 import enum
@@ -28,6 +28,8 @@ class InwardEntry(Base):
     cone_bag_count = Column(Integer, nullable=True)
     next_process = Column(SQLEnum(NextProcess), nullable=True)
     location = Column(String(120), nullable=True)
+    warp_rows = Column(Text, nullable=True)   # JSON array of {count,colour,qty_kg,bundles}, moved from PO
+    weft_rows = Column(Text, nullable=True)    # JSON array of {count,colour,qty_kg,bundles}, moved from PO
     cost = Column(Numeric(10, 2), nullable=True)
     received_by = Column(String(150), nullable=True)
     is_done = Column(Boolean, nullable=False, default=False)
