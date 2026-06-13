@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
@@ -10,7 +10,7 @@ from backend.models.loom_allocation import LoomAllocation, AllocationStatus
 from backend.models.inward import InwardEntry
 from backend.models.beam import Beam, BeamStatus
 from backend.schemas.loom import LoomResponse, LoomAllocationRequest, LoomAllocationResponse
-from backend.api.deps import get_current_user, get_current_admin, require_po_access
+from backend.api.deps import get_current_user, get_current_admin, require_po_access, admin_partial_update
 
 router = APIRouter(prefix="/looms", tags=["Looms"])
 
@@ -137,6 +137,15 @@ def update_allocation_status(alloc_id: str, status: str, db: Session = Depends(g
     db.commit()
     db.refresh(alloc)
     return alloc
+
+
+# Whitelisted admin edit — only the listed columns may be updated
+@router.put("/allocations/{alloc_id}", response_model=LoomAllocationResponse)
+def update_allocation(alloc_id: str, payload: dict = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    obj = db.query(LoomAllocation).filter(LoomAllocation.id == alloc_id).first()
+    if not obj:
+        raise HTTPException(status_code=404, detail="Allocation not found")
+    return admin_partial_update(obj, payload, {"allocation_date", "expected_done"}, db)
 
 
 @router.delete("/allocations/{alloc_id}")

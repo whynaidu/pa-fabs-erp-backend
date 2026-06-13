@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import List
@@ -11,7 +11,7 @@ from backend.models.loom_allocation import LoomAllocation, AllocationStatus
 from backend.models.inventory import Inventory
 from backend.models.po import PurchaseOrder
 from backend.schemas.manufacturing import ManufacturingCreate, ManufacturingResponse
-from backend.api.deps import get_current_user, get_current_admin, require_po_access
+from backend.api.deps import get_current_user, get_current_admin, require_po_access, admin_partial_update
 from datetime import datetime
 import uuid
 
@@ -171,6 +171,15 @@ def get_manufacturing_for_loom(loom_number: int, db: Session = Depends(get_db), 
         ManufacturingLog.loom_number == loom_number
     ).order_by(ManufacturingLog.log_date.desc()).all()
     return logs
+
+
+# Whitelisted admin edit — only the listed columns may be updated
+@router.put("/{mfg_id}", response_model=ManufacturingResponse)
+def update_manufacturing(mfg_id: str, payload: dict = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    obj = db.query(ManufacturingLog).filter(ManufacturingLog.id == mfg_id).first()
+    if not obj:
+        raise HTTPException(status_code=404, detail="Manufacturing log not found")
+    return admin_partial_update(obj, payload, {"metres_today", "operator_name", "remarks", "log_date", "received_date", "received_by", "is_done"}, db)
 
 
 @router.delete("/{mfg_id}")

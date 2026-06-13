@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
@@ -8,7 +8,7 @@ from backend.models.outward import OutwardEntry
 from backend.models.inward import InwardEntry
 from backend.models.return_entry import ReturnEntry
 from backend.schemas.outward import OutwardCreate, OutwardResponse
-from backend.api.deps import get_current_user, get_current_admin, require_po_access
+from backend.api.deps import get_current_user, get_current_admin, require_po_access, admin_partial_update
 
 router = APIRouter(prefix="/outwards", tags=["Outward Entries"])
 
@@ -94,6 +94,15 @@ def mark_outward_done(outward_id: str, db: Session = Depends(get_db), current_us
     db.commit()
     db.refresh(outward)
     return outward
+
+
+# Whitelisted admin edit — only the listed columns may be updated
+@router.put("/{outward_id}", response_model=OutwardResponse)
+def update_outward(outward_id: str, payload: dict = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    obj = db.query(OutwardEntry).filter(OutwardEntry.id == outward_id).first()
+    if not obj:
+        raise HTTPException(status_code=404, detail="Outward not found")
+    return admin_partial_update(obj, payload, {"operator_name", "warp_metres", "warp_cones", "weft_cones", "beams_expected", "outward_date", "expected_return", "is_done"}, db)
 
 
 @router.delete("/{outward_id}")

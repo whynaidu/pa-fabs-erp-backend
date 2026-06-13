@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
@@ -12,7 +12,7 @@ from backend.models.beam import Beam, BeamStatus
 from backend.models.loom import Loom, LoomStatus
 from backend.models.loom_allocation import LoomAllocation
 from backend.schemas.return_entry import ReturnCreate, ReturnResponse
-from backend.api.deps import get_current_user, get_current_admin, require_po_access
+from backend.api.deps import get_current_user, get_current_admin, require_po_access, admin_partial_update
 
 router = APIRouter(prefix="/returns", tags=["Return Entries"])
 
@@ -116,6 +116,15 @@ def get_return(return_id: str, db: Session = Depends(get_db), current_user: User
         raise HTTPException(status_code=404, detail="Return entry not found")
     require_po_access(return_entry.po_number, db, current_user)
     return return_entry
+
+
+# Whitelisted admin edit — only the listed columns may be updated
+@router.put("/{return_id}", response_model=ReturnResponse)
+def update_return(return_id: str, payload: dict = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    obj = db.query(ReturnEntry).filter(ReturnEntry.id == return_id).first()
+    if not obj:
+        raise HTTPException(status_code=404, detail="Return not found")
+    return admin_partial_update(obj, payload, {"warp_metres", "weft_metres", "return_cones", "quality_grade", "operator_name", "receiver_name", "return_date", "remarks"}, db)
 
 
 @router.delete("/{return_id}")

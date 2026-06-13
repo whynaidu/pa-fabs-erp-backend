@@ -54,6 +54,20 @@ def get_current_user(
     return user
 
 
+def admin_partial_update(obj, payload: dict, allowed: set, db: Session):
+    """Apply only whitelisted scalar fields from an admin edit. Derived/JSON state
+    (totals, pieces_data, warp/weft rows, PO+cycle identity) is intentionally NOT
+    editable here — keeps admin corrections safe and side-effect free."""
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="Body must be an object")
+    for key, value in payload.items():
+        if key in allowed:
+            setattr(obj, key, value)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
 def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(

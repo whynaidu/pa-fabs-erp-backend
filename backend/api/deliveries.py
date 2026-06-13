@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
@@ -14,7 +14,7 @@ from backend.models.inventory import Inventory
 from backend.models.po import PurchaseOrder, POStatus
 from backend.models.user import UserRole
 from backend.schemas.delivery import DeliveryCreate, DeliveryResponse, DCSlipResponse
-from backend.api.deps import get_current_user, get_current_admin, require_po_access
+from backend.api.deps import get_current_user, get_current_admin, require_po_access, admin_partial_update
 import json
 import uuid
 
@@ -206,6 +206,15 @@ def get_dc_slip(delivery_id: str, db: Session = Depends(get_db), current_user: U
         grand_total_metres=delivery.grand_total_metres,
         remarks=delivery.remarks
     )
+
+
+# Whitelisted admin edit — only the listed columns may be updated
+@router.put("/{delivery_id}", response_model=DeliveryResponse)
+def update_delivery(delivery_id: str, payload: dict = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    obj = db.query(Delivery).filter(Delivery.id == delivery_id).first()
+    if not obj:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    return admin_partial_update(obj, payload, {"customer_name", "design_no", "reed_pick", "description", "vehicle_number", "driver_name", "receiver_name", "delivery_date", "remarks"}, db)
 
 
 @router.delete("/{delivery_id}")

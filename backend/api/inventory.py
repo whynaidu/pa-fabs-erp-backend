@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import List
@@ -9,7 +9,7 @@ from backend.models.inventory import Inventory
 from backend.models.loom import Loom
 from backend.models.po import PurchaseOrder
 from backend.schemas.inventory import InventoryCreate, InventoryResponse
-from backend.api.deps import get_current_user, get_current_admin, require_po_access
+from backend.api.deps import get_current_user, get_current_admin, require_po_access, admin_partial_update
 
 router = APIRouter(prefix="/inventory-inward", tags=["Inventory Inward"])
 
@@ -83,6 +83,15 @@ def inventory_for_cycle(
         Inventory.po_number == po_number,
         Inventory.cycle_number == cycle_number,
     ).all()
+
+
+# Whitelisted admin edit — only the listed columns may be updated
+@router.put("/{inv_id}", response_model=InventoryResponse)
+def update_inventory(inv_id: str, payload: dict = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    obj = db.query(Inventory).filter(Inventory.id == inv_id).first()
+    if not obj:
+        raise HTTPException(status_code=404, detail="Inventory not found")
+    return admin_partial_update(obj, payload, {"fabric_metres", "quality_grade", "received_date", "received_by", "remarks"}, db)
 
 
 @router.delete("/{inv_id}")
