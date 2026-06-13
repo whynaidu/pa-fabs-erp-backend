@@ -1,13 +1,15 @@
 # PA FABS ERP — Client Change Requests (Tuesday call)
 Status: 🔲 todo · 🟡 in progress · ✅ done · ❓ needs client input
 
+_Decisions: Q1 warp qty = PO qty × (1+shortage%) [2400@8%=2592]; Q2 dropdown Table/Loom; Q3 delivery on manufactured fabric; Q4 mfg total per PO+cycle._
+
 ## A. User page — PO Details
-- 🔲 Specifications: add **"On Table / On Loom"** indicator after Reed and after Pick ❓(field shape — see Q2)
-- 🔲 Remove Warp rows & Weft rows from PO; move them to **Inward Entry**
-- 🔲 After "Cost per Metre" add columns: **Warp Count, Weft Count, Total Ends**
-- 🔲 Order details: rename "Order Quantity (metres)" → **"Purchase Order Quantity (metres)"**
-- 🔲 Add **Shortage %** field (e.g. 8%)
-- 🔲 Add **Total Warp Quantity (metres)** — auto-calculated from PO Qty + Shortage % ❓(formula — see Q1)
+- 🟡 Specifications: **"On Table / On Loom"** dropdown after Reed and Pick — backend ✅, frontend pending
+- 🔲 Remove Warp rows & Weft rows from PO; move them to **Inward Entry** (P2)
+- 🟡 After "Cost per Metre" add **Warp Count, Weft Count, Total Ends** — backend ✅, frontend pending
+- 🔲 Rename "Order Quantity (metres)" → **"Purchase Order Quantity (metres)"** (frontend)
+- 🟡 **Shortage %** field — backend ✅, frontend pending
+- 🟡 **Total Warp Quantity (metres)** = qty×(1+shortage%) — backend computes ✅ (verified 2400→2592), frontend pending
 
 ## B. User page — Inward Entry
 - 🔲 Remove **Next Process** tab/field
@@ -22,12 +24,15 @@ Status: 🔲 todo · 🟡 in progress · ✅ done · ❓ needs client input
 - 🔲 Warping return: **Total Ends** auto-fills from the PO specification
 
 ## E. User page — Manufacturing
-- 🔲 Remove the **Inward Entry block**
-- 🟡 Fix calculation — running total bleeds across allocations on the same loom (should be per PO+cycle) ❓(confirm — Q4)
+- 🔲 Remove the **Inward Entry block** (frontend)
+- ✅ Fix calculation — now per PO+cycle (backend)
 
 ## F. User page — Delivery
-- 🔲 Delivery depends on **manufactured metres only**, not loom-free / all-looms-complete ❓(confirm — Q3)
-- 🔲 Pieces table columns: **No, Metres, Weight (kg)**; footer totals: **Total pieces, Total metres, Total weight**
+- ✅ Delivery depends on **manufactured metres only** (backend — verified)
+- 🟡 Pieces table **No / Metres / Weight (kg)** + footer totals — backend accepts weight + total_weight ✅, frontend pending
+
+## Backend status (P1) — DEPLOYED ✅
+mfg per-cycle calc · delivery manufactured-gate + weight · PO shortage%/total_warp/counts/ends/table-loom · outward weaving · inward location · live-DB column+enum migration · beam numbering MAX-based (fixed 409).
 
 ## G. Admin page
 - 🔲 **View / Edit / Delete** on every stage (PO, inward, outward, return, loom, mfg, inventory, delivery)
