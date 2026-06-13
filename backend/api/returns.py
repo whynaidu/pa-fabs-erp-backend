@@ -54,6 +54,9 @@ def create_return(
         return_data.return_type == "warping_return" and return_data.beam_entries) else []
     for attempt in range(5):
         db.add(new_return)
+        # Flush so the return row is INSERTed before the beams — beams.return_entry_id
+        # FKs to it, and there is no ORM relationship to order the inserts otherwise.
+        db.flush()
         if beam_entries:
             # Next number = highest existing B### + 1 (NOT count() — deleted beams
             # leave gaps so count can point at an already-used number → collision).
