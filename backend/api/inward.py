@@ -10,7 +10,7 @@ from backend.models.inward import InwardEntry
 from backend.models.po import PurchaseOrder, POStatus
 from backend.models.delivery import Delivery
 from backend.schemas.inward import InwardCreate, InwardResponse
-from backend.api.deps import get_current_user, require_po_access
+from backend.api.deps import get_current_user, require_po_access, get_current_admin
 
 router = APIRouter(prefix="/inwards", tags=["Inward Entries"])
 
@@ -142,3 +142,34 @@ def mark_inward_done(inward_id: str, db: Session = Depends(get_db), current_user
     db.commit()
     db.refresh(inward)
     return inward
+
+
+@router.put("/{inward_id}", response_model=InwardResponse)
+def update_inward(inward_id: str, payload: InwardCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    import json
+    inward = db.query(InwardEntry).filter(InwardEntry.id == inward_id).first()
+    if not inward:
+        raise HTTPException(status_code=404, detail="Inward entry not found")
+    data = payload.dict(exclude_unset=True)
+    data.pop("po_number", None)   # PO + cycle are immutable
+    warp_rows = data.pop("warp_rows", None)
+    weft_rows = data.pop("weft_rows", None)
+    for field, value in data.items():
+        setattr(inward, field, value)
+    if warp_rows is not None:   # payload.dict() already lowered YarnRow → dict
+        inward.warp_rows = json.dumps(warp_rows) if warp_rows else None
+    if weft_rows is not None:
+        inward.weft_rows = json.dumps(weft_rows) if weft_rows else None
+    db.commit()
+    db.refresh(inward)
+    return inward
+
+
+@router.delete("/{inward_id}")
+def delete_inward(inward_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    inward = db.query(InwardEntry).filter(InwardEntry.id == inward_id).first()
+    if not inward:
+        raise HTTPException(status_code=404, detail="Inward entry not found")
+    db.delete(inward)
+    db.commit()
+    return {"message": "Inward entry deleted"}

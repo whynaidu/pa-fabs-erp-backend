@@ -11,7 +11,7 @@ from backend.models.loom_allocation import LoomAllocation, AllocationStatus
 from backend.models.inventory import Inventory
 from backend.models.po import PurchaseOrder
 from backend.schemas.manufacturing import ManufacturingCreate, ManufacturingResponse
-from backend.api.deps import get_current_user, require_po_access
+from backend.api.deps import get_current_user, get_current_admin, require_po_access
 from datetime import datetime
 import uuid
 
@@ -171,3 +171,13 @@ def get_manufacturing_for_loom(loom_number: int, db: Session = Depends(get_db), 
         ManufacturingLog.loom_number == loom_number
     ).order_by(ManufacturingLog.log_date.desc()).all()
     return logs
+
+
+@router.delete("/{mfg_id}")
+def delete_manufacturing_log(mfg_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    log = db.query(ManufacturingLog).filter(ManufacturingLog.id == mfg_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Manufacturing log not found")
+    db.delete(log)
+    db.commit()
+    return {"message": "Manufacturing log deleted"}

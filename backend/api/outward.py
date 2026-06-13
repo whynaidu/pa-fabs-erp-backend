@@ -6,8 +6,9 @@ from backend.database import get_db
 from backend.models.user import User
 from backend.models.outward import OutwardEntry
 from backend.models.inward import InwardEntry
+from backend.models.return_entry import ReturnEntry
 from backend.schemas.outward import OutwardCreate, OutwardResponse
-from backend.api.deps import get_current_user, require_po_access
+from backend.api.deps import get_current_user, get_current_admin, require_po_access
 
 router = APIRouter(prefix="/outwards", tags=["Outward Entries"])
 
@@ -93,3 +94,15 @@ def mark_outward_done(outward_id: str, db: Session = Depends(get_db), current_us
     db.commit()
     db.refresh(outward)
     return outward
+
+
+@router.delete("/{outward_id}")
+def delete_outward(outward_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    outward = db.query(OutwardEntry).filter(OutwardEntry.id == outward_id).first()
+    if not outward:
+        raise HTTPException(status_code=404, detail="Outward entry not found")
+    # NULL FK before delete — ReturnEntry.outward_id references this row
+    db.query(ReturnEntry).filter(ReturnEntry.outward_id == outward_id).update({"outward_id": None})
+    db.delete(outward)
+    db.commit()
+    return {"message": "Outward entry deleted"}

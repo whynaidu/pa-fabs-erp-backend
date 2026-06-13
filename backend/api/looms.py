@@ -10,7 +10,7 @@ from backend.models.loom_allocation import LoomAllocation, AllocationStatus
 from backend.models.inward import InwardEntry
 from backend.models.beam import Beam, BeamStatus
 from backend.schemas.loom import LoomResponse, LoomAllocationRequest, LoomAllocationResponse
-from backend.api.deps import get_current_user, require_po_access
+from backend.api.deps import get_current_user, get_current_admin, require_po_access
 
 router = APIRouter(prefix="/looms", tags=["Looms"])
 
@@ -137,6 +137,23 @@ def update_allocation_status(alloc_id: str, status: str, db: Session = Depends(g
     db.commit()
     db.refresh(alloc)
     return alloc
+
+
+@router.delete("/allocations/{alloc_id}")
+def delete_allocation(alloc_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    alloc = db.query(LoomAllocation).filter(LoomAllocation.id == alloc_id).first()
+    if not alloc:
+        raise HTTPException(status_code=404, detail="Allocation not found")
+    # Free the loom only if it is still held by this exact allocation (guards against re-use)
+    loom = db.query(Loom).filter(Loom.loom_number == alloc.loom_number).first()
+    if loom and loom.current_po == alloc.po_number and loom.current_cycle == alloc.cycle_number and loom.current_beam == alloc.beam_id:
+        loom.status = LoomStatus.FREE
+        loom.current_po = None
+        loom.current_cycle = None
+        loom.current_beam = None
+    db.delete(alloc)
+    db.commit()
+    return {"message": "Allocation deleted"}
 
 
 @router.get("/{loom_number}", response_model=LoomResponse)

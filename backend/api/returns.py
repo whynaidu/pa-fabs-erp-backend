@@ -9,8 +9,10 @@ from backend.models.user import User
 from backend.models.return_entry import ReturnEntry
 from backend.models.inward import InwardEntry
 from backend.models.beam import Beam, BeamStatus
+from backend.models.loom import Loom, LoomStatus
+from backend.models.loom_allocation import LoomAllocation
 from backend.schemas.return_entry import ReturnCreate, ReturnResponse
-from backend.api.deps import get_current_user, require_po_access
+from backend.api.deps import get_current_user, get_current_admin, require_po_access
 
 router = APIRouter(prefix="/returns", tags=["Return Entries"])
 
@@ -114,3 +116,27 @@ def get_return(return_id: str, db: Session = Depends(get_db), current_user: User
         raise HTTPException(status_code=404, detail="Return entry not found")
     require_po_access(return_entry.po_number, db, current_user)
     return return_entry
+
+
+@router.delete("/{return_id}")
+def delete_return(return_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    return_entry = db.query(ReturnEntry).filter(ReturnEntry.id == return_id).first()
+    if not return_entry:
+        raise HTTPException(status_code=404, detail="Return entry not found")
+    # Cascade: beams → loom_allocations (and free any loom still holding a beam) → beams → return
+    beams = db.query(Beam).filter(Beam.return_entry_id == return_id).all()
+    for beam in beams:
+        # Delete allocations referencing this beam, freeing any loom still occupied by it
+        allocs = db.query(LoomAllocation).filter(LoomAllocation.beam_id == beam.beam_number).all()
+        for alloc in allocs:
+            loom = db.query(Loom).filter(Loom.loom_number == alloc.loom_number).first()
+            if loom and loom.current_beam == beam.beam_number:
+                loom.status = LoomStatus.FREE
+                loom.current_po = None
+                loom.current_cycle = None
+                loom.current_beam = None
+            db.delete(alloc)
+        db.delete(beam)
+    db.delete(return_entry)
+    db.commit()
+    return {"message": "Return entry deleted"}

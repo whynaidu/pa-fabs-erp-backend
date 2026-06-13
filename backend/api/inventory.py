@@ -9,7 +9,7 @@ from backend.models.inventory import Inventory
 from backend.models.loom import Loom
 from backend.models.po import PurchaseOrder
 from backend.schemas.inventory import InventoryCreate, InventoryResponse
-from backend.api.deps import get_current_user, require_po_access
+from backend.api.deps import get_current_user, get_current_admin, require_po_access
 
 router = APIRouter(prefix="/inventory-inward", tags=["Inventory Inward"])
 
@@ -83,3 +83,13 @@ def inventory_for_cycle(
         Inventory.po_number == po_number,
         Inventory.cycle_number == cycle_number,
     ).all()
+
+
+@router.delete("/{inv_id}")
+def delete_inventory(inv_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    record = db.query(Inventory).filter(Inventory.id == inv_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Inventory record not found")
+    db.delete(record)
+    db.commit()
+    return {"message": "Inventory record deleted"}

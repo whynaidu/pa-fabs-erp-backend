@@ -206,3 +206,13 @@ def get_dc_slip(delivery_id: str, db: Session = Depends(get_db), current_user: U
         grand_total_metres=delivery.grand_total_metres,
         remarks=delivery.remarks
     )
+
+
+@router.delete("/{delivery_id}")
+def delete_delivery(delivery_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    db.delete(delivery)
+    db.commit()
+    return {"message": "Delivery deleted"}
