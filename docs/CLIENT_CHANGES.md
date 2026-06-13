@@ -4,32 +4,32 @@ Status: 🔲 todo · 🟡 in progress · ✅ done · ❓ needs client input
 _Decisions: Q1 warp qty = PO qty × (1+shortage%) [2400@8%=2592]; Q2 dropdown Table/Loom; Q3 delivery on manufactured fabric; Q4 mfg total per PO+cycle._
 
 ## A. User page — PO Details
-- 🟡 Specifications: **"On Table / On Loom"** dropdown after Reed and Pick — backend ✅, frontend pending
-- 🔲 Remove Warp rows & Weft rows from PO; move them to **Inward Entry** (P2)
-- 🟡 After "Cost per Metre" add **Warp Count, Weft Count, Total Ends** — backend ✅, frontend pending
-- 🔲 Rename "Order Quantity (metres)" → **"Purchase Order Quantity (metres)"** (frontend)
-- 🟡 **Shortage %** field — backend ✅, frontend pending
-- 🟡 **Total Warp Quantity (metres)** = qty×(1+shortage%) — backend computes ✅ (verified 2400→2592), frontend pending
+- ✅ Specifications: **"On Table / On Loom"** dropdown after Reed and Pick
+- ✅ Remove Warp rows & Weft rows from PO; moved to **Inward Entry**
+- ✅ After "Cost per Metre" add **Warp Count, Weft Count, Total Ends**
+- ✅ Rename "Order Quantity (metres)" → **"Purchase Order Quantity (metres)"**
+- ✅ **Shortage %** field
+- ✅ **Total Warp Quantity (metres)** = qty×(1+shortage%) — verified 2400→2592, auto-calc live
 
 ## B. User page — Inward Entry
-- 🔲 Remove **Next Process** tab/field
-- 🔲 Replace warp/weft detail fields with **Warp rows & Weft rows** (moved from PO)
-- 🔲 Add **Location** column
+- ✅ Remove **Next Process** tab/field
+- ✅ Replace warp/weft detail fields with **Warp rows & Weft rows** (moved from PO, pre-filled + editable) — backend+frontend, verified live
+- ✅ Add **Location** column
 
 ## C. User page — Outward Entry
-- 🔲 Winding process → show **both** warp-rows and weft-rows blocks
-- 🔲 Add **Weaving** option to Process Type → shows **weft-rows block only** (no warp)
+- ✅ Winding process → show **both** warp-rows and weft-rows blocks
+- ✅ Add **Weaving** option to Process Type → shows **weft-rows block only** (no warp)
 
 ## D. User page — Return Entry
-- 🔲 Warping return: **Total Ends** auto-fills from the PO specification
+- ✅ Warping return: **Total Ends** auto-fills from the PO specification (beam rows)
 
 ## E. User page — Manufacturing
-- 🔲 Remove the **Inward Entry block** (frontend)
+- ✅ Remove the **Inward Entry block** (frontend; fabric received automatically = metres produced)
 - ✅ Fix calculation — now per PO+cycle (backend)
 
 ## F. User page — Delivery
 - ✅ Delivery depends on **manufactured metres only** (backend — verified)
-- 🟡 Pieces table **No / Metres / Weight (kg)** + footer totals — backend accepts weight + total_weight ✅, frontend pending
+- ✅ Pieces table **No / Metres / Weight (kg)** + live footer totals; total weight in tables + DC slip
 
 ## Backend status (P1) — DEPLOYED ✅
 mfg per-cycle calc · delivery manufactured-gate + weight · PO shortage%/total_warp/counts/ends/table-loom · outward weaving · inward location · live-DB column+enum migration · beam numbering MAX-based (fixed 409).
