@@ -35,9 +35,10 @@ _Decisions: Q1 warp qty = PO qty × (1+shortage%) [2400@8%=2592]; Q2 dropdown Ta
 mfg per-cycle calc · delivery manufactured-gate + weight · PO shortage%/total_warp/counts/ends/table-loom · outward weaving · inward location · live-DB column+enum migration · beam numbering MAX-based (fixed 409).
 
 ## G. Admin page
-- ✅ **View / Delete** on every stage (PO, inward, outward, return, mfg, delivery) + DELETE endpoints (admin-only) verified live. (Edit: PO full edit ✅; inward PUT backend ✅; other-stage edit forms = future)
+- ✅ **View / Edit / Delete** on every stage (PO, inward, outward, return, mfg, delivery, loom-alloc). Whitelisted PUT endpoints (admin-only) + generic pre-filled edit modal; DELETE endpoints with FK cascades. Verified live (edit saves, derived state preserved, non-admin → 403).
 - ✅ **Download** (CSV) per stage (inward/outward/return/mfg/delivery/PO)
 - ✅ Tables not showing fully → fixed (table-card overflow-x auto + nowrap headers)
+- ✅ Bonus fixes: staff `/users` 403 noise removed; login role-desync after logout fixed (was causing "Role mismatch").
 
 ## H. UI — global
 - ✅ Login page: weaving / Lord Murugan art hook on left panel (drop `login_art.jpg` in frontend root; dark-scrim overlay, gradient fallback)
