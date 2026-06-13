@@ -28,24 +28,32 @@ _NEW_COLUMNS = [
 
 
 def _migrate_columns() -> None:
+    """Add columns/enum values introduced after first deploy. MUST be lock-safe:
+    during a rolling deploy the old instance still holds locks, and DDL that blocks
+    would hang startup. So each statement runs in its own short-lock-timeout txn and
+    any failure is swallowed (it simply re-runs on the next clean restart)."""
     if engine.dialect.name != "postgresql":
         return  # SQLite dev DBs are created fresh with the full schema
-    with engine.begin() as conn:
-        for table, col, coltype in _NEW_COLUMNS:
-            conn.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {coltype}'))
-    # Add the new 'weaving' value to the outward process-type enum. ALTER TYPE ADD
-    # VALUE must run outside a transaction, so use an autocommit connection. The
-    # enum type name is discovered (it backs the existing 'warping' value).
-    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-        row = conn.execute(text(
-            "SELECT t.typname FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
-            "WHERE e.enumlabel = 'warping' LIMIT 1"
-        )).fetchone()
-        if row:
-            try:
+    for table, col, coltype in _NEW_COLUMNS:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("SET LOCAL lock_timeout = '3s'"))
+                conn.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {coltype}'))
+        except Exception:
+            pass
+    # Add the new 'weaving' value to the outward process-type enum (autocommit;
+    # ALTER TYPE ADD VALUE cannot run inside a transaction). Name is discovered.
+    try:
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            conn.execute(text("SET lock_timeout = '3s'"))
+            row = conn.execute(text(
+                "SELECT t.typname FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+                "WHERE e.enumlabel = 'warping' LIMIT 1"
+            )).fetchone()
+            if row:
                 conn.execute(text(f"ALTER TYPE {row[0]} ADD VALUE IF NOT EXISTS 'weaving'"))
-            except Exception:
-                pass
+    except Exception:
+        pass
 
 
 def init_and_seed() -> None:
