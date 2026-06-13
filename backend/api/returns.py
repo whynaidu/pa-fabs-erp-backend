@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from typing import List
 import uuid
 from backend.database import get_db
@@ -54,7 +55,10 @@ def create_return(
     for attempt in range(5):
         db.add(new_return)
         if beam_entries:
-            base = db.query(Beam).count()
+            # Next number = highest existing B### + 1 (NOT count() — deleted beams
+            # leave gaps so count can point at an already-used number → collision).
+            max_beam = db.query(func.max(Beam.beam_number)).scalar()
+            base = int(max_beam[1:]) if (max_beam and max_beam[1:].isdigit()) else 0
             for idx, beam_entry in enumerate(beam_entries):
                 db.add(Beam(
                     id=f"beam_{uuid.uuid4().hex}",
