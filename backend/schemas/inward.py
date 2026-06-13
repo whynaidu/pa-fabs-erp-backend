@@ -16,7 +16,8 @@ class InwardBase(BaseModel):
     weft_bundles: Optional[int] = None
     rm_number: Optional[str] = None
     cone_bag_count: Optional[int] = None
-    next_process: NextProcess
+    next_process: Optional[NextProcess] = None
+    location: Optional[str] = None
     cost: Optional[float] = None
     received_by: Optional[str] = None
     is_done: bool = False

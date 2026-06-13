@@ -20,6 +20,7 @@ class Delivery(Base):
     pieces_data = Column(Text, nullable=True)
     no_pieces = Column(Integer, nullable=True)
     grand_total_metres = Column(Numeric(10, 2), nullable=False)
+    total_weight = Column(Numeric(10, 2), nullable=True)
     vehicle_number = Column(String(20), nullable=True)
     driver_name = Column(String(150), nullable=True)
     receiver_name = Column(String(150), nullable=True)

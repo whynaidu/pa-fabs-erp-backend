@@ -54,6 +54,7 @@ def create_inward(
         rm_number=inward.rm_number,
         cone_bag_count=inward.cone_bag_count,
         next_process=inward.next_process,
+        location=inward.location,
         cost=inward.cost,
         received_by=inward.received_by,
         is_done=inward.is_done,

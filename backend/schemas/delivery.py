@@ -8,6 +8,7 @@ class PieceData(BaseModel):
     type: Optional[str] = None
     piece_no: str
     metres: float = Field(gt=0)
+    weight: Optional[float] = None        # kg
 
 
 class DeliveryBase(BaseModel):
@@ -34,6 +35,7 @@ class DeliveryResponse(DeliveryBase):
     dc_number: str
     no_pieces: Optional[int]
     grand_total_metres: float
+    total_weight: Optional[float] = None
     submitted_by: str
     created_at: datetime
 

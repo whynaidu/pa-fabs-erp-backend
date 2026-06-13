@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Numeric, DateTime, Enum as SQLEnum, Text
+from sqlalchemy import Column, String, Numeric, Integer, DateTime, Enum as SQLEnum, Text
 from sqlalchemy.sql import func
 from backend.database import Base
 import enum
@@ -20,9 +20,15 @@ class PurchaseOrder(Base):
     remarks = Column(Text, nullable=True)
     reed = Column(String(20), nullable=True)
     pick = Column(String(20), nullable=True)
+    reed_on = Column(String(10), nullable=True)   # 'table' or 'loom'
+    pick_on = Column(String(10), nullable=True)   # 'table' or 'loom'
     width = Column(String(20), nullable=True)
     order_qty = Column(Numeric(10, 2), nullable=False)
     cost_per_meter = Column(Numeric(10, 2), nullable=True)
+    warp_count = Column(String(50), nullable=True)
+    weft_count = Column(String(50), nullable=True)
+    total_ends = Column(Integer, nullable=True)
+    shortage_percentage = Column(Numeric(5, 2), nullable=True)
     order_date = Column(DateTime(timezone=True), nullable=True)
     expected_date = Column(DateTime(timezone=True), nullable=True)
     status = Column(SQLEnum(POStatus), nullable=False, default=POStatus.PENDING)

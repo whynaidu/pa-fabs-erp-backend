@@ -7,6 +7,7 @@ import enum
 class ProcessType(str, enum.Enum):
     WARPING = "warping"
     WINDING = "winding"
+    WEAVING = "weaving"
 
 
 class OutwardEntry(Base):

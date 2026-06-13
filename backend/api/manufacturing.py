@@ -59,8 +59,13 @@ def create_manufacturing_log(
     if loom.status != LoomStatus.OCCUPIED:
         raise HTTPException(status_code=400, detail="Loom is not occupied")
 
+    # Running total is per PO+cycle (NOT per loom) — a loom is re-used across many
+    # POs/cycles, so summing by loom alone would carry a prior job's metres into a
+    # new one's total/balance.
     prev_total = db.query(func.sum(ManufacturingLog.metres_today)).filter(
-        ManufacturingLog.loom_number == manufacturing.loom_number
+        ManufacturingLog.loom_number == manufacturing.loom_number,
+        ManufacturingLog.po_number == (loom.current_po or ""),
+        ManufacturingLog.cycle_number == (loom.current_cycle or 1),
     ).scalar() or 0
 
     new_total = float(prev_total) + float(manufacturing.metres_today)

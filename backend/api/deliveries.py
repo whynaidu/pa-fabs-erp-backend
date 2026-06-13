@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from typing import List
 from backend.database import get_db
 from backend.models.user import User
@@ -8,6 +9,7 @@ from backend.models.delivery import Delivery
 from backend.models.inward import InwardEntry
 from backend.models.loom import Loom, LoomStatus
 from backend.models.loom_allocation import LoomAllocation, AllocationStatus
+from backend.models.manufacturing import ManufacturingLog
 from backend.models.inventory import Inventory
 from backend.models.po import PurchaseOrder, POStatus
 from backend.models.user import UserRole
@@ -20,30 +22,18 @@ router = APIRouter(prefix="/deliveries", tags=["Deliveries"])
 
 
 def _delivery_readiness(db: Session, po_number: str, cycle_number: int) -> dict:
-    """A PO+cycle is deliverable when every loom allocation for it is completed
-    and a finished-fabric (inventory) record exists for each. Direct flows with
-    no allocations fall back to whatever pieces the caller supplies."""
-    allocations = db.query(LoomAllocation).filter(
-        LoomAllocation.po_number == po_number,
-        LoomAllocation.cycle_number == cycle_number,
-    ).all()
-    inventory = db.query(Inventory).filter(
-        Inventory.po_number == po_number,
-        Inventory.cycle_number == cycle_number,
-    ).all()
+    """Delivery depends on MANUFACTURED fabric only (not loom-free / inventory):
+    as soon as any metres have been woven for the PO+cycle it can be delivered."""
+    manufactured = float(db.query(func.coalesce(func.sum(ManufacturingLog.metres_today), 0)).filter(
+        ManufacturingLog.po_number == po_number,
+        ManufacturingLog.cycle_number == cycle_number,
+    ).scalar() or 0)
     reasons = []
-    pending = [a.loom_number for a in allocations if a.status != AllocationStatus.COMPLETED]
-    if pending:
-        reasons.append(f"Weaving not complete on looms: {pending}")
-    # Require a finished-fabric record for every allocated loom, not just one.
-    inv_looms = {r.loom_number for r in inventory}
-    missing_inv = [a.loom_number for a in allocations if a.loom_number not in inv_looms]
-    if missing_inv:
-        reasons.append(f"No finished-fabric (inventory) records for looms: {missing_inv}")
+    if manufactured <= 0:
+        reasons.append("No fabric manufactured yet for this PO+cycle")
     if db.query(Delivery).filter(Delivery.po_number == po_number, Delivery.cycle_number == cycle_number).first():
         reasons.append("Delivery already exists for this PO+cycle")
-    return {"ready": len(reasons) == 0, "reasons": reasons,
-            "allocation_count": len(allocations), "inventory_count": len(inventory)}
+    return {"ready": len(reasons) == 0, "reasons": reasons, "manufactured_metres": manufactured}
 
 
 @router.post("/", response_model=DeliveryResponse)
@@ -72,31 +62,28 @@ def create_delivery(
     ).first():
         raise HTTPException(status_code=400, detail="Delivery already exists for this PO+cycle")
 
-    # Block delivery until weaving is complete on every allocated loom for the cycle.
+    # Delivery is gated on manufactured fabric only (client rule).
     ready = _delivery_readiness(db, delivery.po_number, cycle_number)
-    if not ready["ready"] and ready["allocation_count"] > 0:
+    if not ready["ready"]:
         raise HTTPException(status_code=400, detail="; ".join(ready["reasons"]))
 
-    # Spec: pieces are auto-built from inventory_inward; manual pieces are a
-    # fallback for direct flows with no finished-fabric records yet.
-    inventory = db.query(Inventory).filter(
-        Inventory.po_number == delivery.po_number,
-        Inventory.cycle_number == cycle_number,
-    ).all()
-    if inventory:
-        pieces = [{
-            "piece_no": str(i + 1),
-            "loom_no": r.loom_number,
-            "beam_id": r.beam_id,
-            "metres": float(r.fabric_metres),
-        } for i, r in enumerate(inventory)]
+    # Pieces come from the user's piece table (No / Metres / Weight). If none are
+    # supplied, fall back to the finished-fabric (inventory) rows for the cycle.
+    if delivery.pieces_data:
+        pieces = [p.model_dump() for p in delivery.pieces_data]
     else:
-        pieces = [p.model_dump() for p in (delivery.pieces_data or [])]
+        inventory = db.query(Inventory).filter(
+            Inventory.po_number == delivery.po_number,
+            Inventory.cycle_number == cycle_number,
+        ).all()
+        pieces = [{"piece_no": str(i + 1), "metres": float(r.fabric_metres), "weight": None}
+                  for i, r in enumerate(inventory)]
 
     if not pieces:
-        raise HTTPException(status_code=400, detail="Delivery has no pieces (no finished fabric recorded and none supplied)")
+        raise HTTPException(status_code=400, detail="Delivery has no pieces — add at least one piece")
 
-    total_metres = sum(p["metres"] for p in pieces)
+    total_metres = sum((p.get("metres") or 0) for p in pieces)
+    total_weight = sum((p.get("weight") or 0) for p in pieces)
     no_pieces = len(pieces)
     pieces_json = json.dumps(pieces)
 
@@ -116,6 +103,7 @@ def create_delivery(
         pieces_data=pieces_json,
         no_pieces=no_pieces,
         grand_total_metres=total_metres,
+        total_weight=total_weight,
         vehicle_number=delivery.vehicle_number,
         driver_name=delivery.driver_name,
         receiver_name=delivery.receiver_name,

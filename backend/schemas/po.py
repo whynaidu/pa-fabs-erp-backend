@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
 from datetime import datetime
 from backend.models.po import POStatus
@@ -19,9 +19,15 @@ class POBase(BaseModel):
     remarks: Optional[str] = None
     reed: Optional[str] = None
     pick: Optional[str] = None
+    reed_on: Optional[str] = None        # 'table' or 'loom'
+    pick_on: Optional[str] = None        # 'table' or 'loom'
     width: Optional[str] = None
     order_qty: float = Field(gt=0)
     cost_per_meter: Optional[float] = None
+    warp_count: Optional[str] = None
+    weft_count: Optional[str] = None
+    total_ends: Optional[int] = None
+    shortage_percentage: Optional[float] = None
     order_date: Optional[datetime] = None
     expected_date: Optional[datetime] = None
     warp_rows: List[YarnRow] = []
@@ -38,9 +44,15 @@ class POUpdate(BaseModel):
     remarks: Optional[str] = None
     reed: Optional[str] = None
     pick: Optional[str] = None
+    reed_on: Optional[str] = None
+    pick_on: Optional[str] = None
     width: Optional[str] = None
     order_qty: Optional[float] = None
     cost_per_meter: Optional[float] = None
+    warp_count: Optional[str] = None
+    weft_count: Optional[str] = None
+    total_ends: Optional[int] = None
+    shortage_percentage: Optional[float] = None
     order_date: Optional[datetime] = None
     expected_date: Optional[datetime] = None
     status: Optional[POStatus] = None
@@ -65,7 +77,15 @@ class POResponse(POBase):
     user_id: str
     status: POStatus
     created_at: datetime
+    total_warp_qty: Optional[float] = None
     yarn_details: List[POYarnDetailResponse] = []
+
+    @model_validator(mode="after")
+    def _compute_total_warp_qty(self):
+        # Standard weaving allowance: warp length = fabric length × (1 + shortage%).
+        if self.order_qty is not None and self.shortage_percentage is not None:
+            self.total_warp_qty = round(self.order_qty * (1 + self.shortage_percentage / 100), 2)
+        return self
 
     class Config:
         from_attributes = True

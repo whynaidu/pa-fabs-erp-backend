@@ -85,9 +85,15 @@ def create_po(po: POCreate, db: Session = Depends(get_db), current_user: User = 
         remarks=po.remarks,
         reed=po.reed,
         pick=po.pick,
+        reed_on=po.reed_on,
+        pick_on=po.pick_on,
         width=po.width,
         order_qty=po.order_qty,
         cost_per_meter=po.cost_per_meter,
+        warp_count=po.warp_count,
+        weft_count=po.weft_count,
+        total_ends=po.total_ends,
+        shortage_percentage=po.shortage_percentage,
         order_date=po.order_date,
         expected_date=po.expected_date
     )

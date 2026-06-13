@@ -27,6 +27,7 @@ class InwardEntry(Base):
     rm_number = Column(String(80), nullable=True)
     cone_bag_count = Column(Integer, nullable=True)
     next_process = Column(SQLEnum(NextProcess), nullable=True)
+    location = Column(String(120), nullable=True)
     cost = Column(Numeric(10, 2), nullable=True)
     received_by = Column(String(150), nullable=True)
     is_done = Column(Boolean, nullable=False, default=False)
