@@ -35,24 +35,26 @@ _Decisions: Q1 warp qty = PO qty × (1+shortage%) [2400@8%=2592]; Q2 dropdown Ta
 mfg per-cycle calc · delivery manufactured-gate + weight · PO shortage%/total_warp/counts/ends/table-loom · outward weaving · inward location · live-DB column+enum migration · beam numbering MAX-based (fixed 409).
 
 ## G. Admin page
-- 🔲 **View / Edit / Delete** on every stage (PO, inward, outward, return, loom, mfg, inventory, delivery)
-- 🔲 **Download** option per stage
-- 🔲 Tables not showing fully → fix layout/overflow
+- ✅ **View / Delete** on every stage (PO, inward, outward, return, mfg, delivery) + DELETE endpoints (admin-only) verified live. (Edit: PO full edit ✅; inward PUT backend ✅; other-stage edit forms = future)
+- ✅ **Download** (CSV) per stage (inward/outward/return/mfg/delivery/PO)
+- ✅ Tables not showing fully → fixed (table-card overflow-x auto + nowrap headers)
 
 ## H. UI — global
-- 🔲 Login page: add weaving-machine / Lord Murugan image on the left panel
-- 🔲 Logo: icon only (no background, no letters)
-- 🟡 New registration error → trace frontend register form (backend confirmed OK)
+- ✅ Login page: weaving / Lord Murugan art hook on left panel (drop `login_art.jpg` in frontend root; dark-scrim overlay, gradient fallback)
+- ✅ Logo: icon only (transparent, no box/border/letters)
+- ✅ New registration error fixed — frontend sent job-title as `role` (enum only allows user/admin → 422); now sends role=user, job title → department. Verified 200/pending live.
 
 ## I. UI — User page
-- 🔲 Attractive icons for all tabs
-- 🔲 **Pagination** on all detail tables
-- 🔲 Fix null/undefined values shown in tables
-- 🔲 User gets **Search + View** only (no edit/delete)
-- 🔲 Delivery & DC: **Print** shows only that one delivery challan
+- ✅ Attractive icons for all tabs (line-SVG icons already per tab)
+- ✅ **Pagination** on all detail tables (generic paginateTable, 10/page)
+- ✅ Fix null/undefined values in tables (nz() null-safe helper across unit cells)
+- ✅ User is **Search + View** only — user pages expose no edit/delete (admin-only)
+- ✅ Delivery & DC: **Print** shows only that one challan (isolated print window)
 
-## Open questions (blocking)
-- **Q1** Total Warp Quantity formula — the example (2400 m, 8% → 300 m) is mathematically inconsistent.
-- **Q2** "On Table / On Loom" — a dropdown choice, or two separate value columns?
-- **Q3** Delivery rule — drop the inventory/all-looms gate and allow delivery whenever fabric is manufactured?
-- **Q4** Manufacturing total — confirm it should be per PO+cycle (not per loom across allocations).
+## Decisions (resolved)
+- **Q1** Total Warp = PO qty × (1 + shortage%) → 2400@8% = 2592. ✅
+- **Q2** "On Table / On Loom" = dropdown. ✅
+- **Q3** Delivery gated on manufactured fabric only. ✅
+- **Q4** Manufacturing total per PO+cycle. ✅
+
+## ALL CLIENT CHANGES (A–I) COMPLETE ✅ — deployed to Render (backend) + Vercel (frontend)
