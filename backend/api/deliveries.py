@@ -55,12 +55,8 @@ def create_delivery(
 
     cycle_number = inward.cycle_number
 
-    # One delivery per PO+cycle (full only).
-    if db.query(Delivery).filter(
-        Delivery.po_number == delivery.po_number,
-        Delivery.cycle_number == cycle_number,
-    ).first():
-        raise HTTPException(status_code=400, detail="Delivery already exists for this PO+cycle")
+    # Multiple batch deliveries per PO+cycle are allowed — fabric is delivered as it
+    # becomes available, over several days. (No one-delivery-per-cycle block anymore.)
 
     # Delivery is gated on manufactured fabric only (client rule).
     ready = _delivery_readiness(db, delivery.po_number, cycle_number)
@@ -113,29 +109,35 @@ def create_delivery(
 
     db.add(new_delivery)
 
-    # Free every loom used by this PO+cycle — the only event that releases the
-    # global lock. Done in the SAME transaction as the delivery insert so the
-    # lock can never leak on partial failure.
-    allocations = db.query(LoomAllocation).filter(
-        LoomAllocation.po_number == delivery.po_number,
-        LoomAllocation.cycle_number == cycle_number
-    ).all()
-    for alloc in allocations:
-        loom = db.query(Loom).filter(Loom.loom_number == alloc.loom_number).first()
-        if loom:
-            loom.status = LoomStatus.FREE
-            loom.current_po = None
-            loom.current_cycle = None
-            loom.current_beam = None
-            loom.allocated_by = None
-            loom.allocated_at = None
+    # A PO is delivered in batches while the loom keeps weaving. The loom stays
+    # assigned to the PO until the FULL ordered quantity has been manufactured —
+    # only then is it released and the PO marked complete. So partial deliveries
+    # do NOT free the loom; the final one (once production is complete) does.
+    manufactured = float(db.query(func.coalesce(func.sum(ManufacturingLog.metres_today), 0)).filter(
+        ManufacturingLog.po_number == delivery.po_number,
+        ManufacturingLog.cycle_number == cycle_number,
+    ).scalar() or 0)
+    production_complete = po.order_qty is not None and manufactured >= float(po.order_qty)
 
-    po.status = POStatus.COMPLETE
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Delivery already exists for this PO+cycle")
+    if production_complete:
+        allocations = db.query(LoomAllocation).filter(
+            LoomAllocation.po_number == delivery.po_number,
+            LoomAllocation.cycle_number == cycle_number
+        ).all()
+        for alloc in allocations:
+            loom = db.query(Loom).filter(Loom.loom_number == alloc.loom_number).first()
+            if loom:
+                loom.status = LoomStatus.FREE
+                loom.current_po = None
+                loom.current_cycle = None
+                loom.current_beam = None
+                loom.allocated_by = None
+                loom.allocated_at = None
+        po.status = POStatus.COMPLETE
+    else:
+        po.status = POStatus.IN_PROGRESS   # still producing — loom stays assigned
+
+    db.commit()
     db.refresh(new_delivery)
 
     return new_delivery

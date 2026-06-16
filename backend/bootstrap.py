@@ -43,6 +43,14 @@ def _migrate_columns() -> None:
                 conn.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {coltype}'))
         except Exception:
             pass
+    # Drop the old one-delivery-per-PO+cycle unique constraint — deliveries are now
+    # made in multiple batches, so many share a (po_number, cycle_number).
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("SET LOCAL lock_timeout = '3s'"))
+            conn.execute(text('ALTER TABLE deliveries DROP CONSTRAINT IF EXISTS uq_delivery_po_cycle'))
+    except Exception:
+        pass
     # Add the new 'weaving' value to the outward process-type enum (autocommit;
     # ALTER TYPE ADD VALUE cannot run inside a transaction). Name is discovered.
     try:

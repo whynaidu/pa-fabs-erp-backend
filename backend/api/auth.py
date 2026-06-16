@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models.user import User, UserRole, UserStatus
@@ -10,6 +10,25 @@ from backend.config import settings
 import uuid
 
 router = APIRouter(tags=["Authentication"])
+
+
+@router.post("/forgot-password")
+def forgot_password(payload: dict = Body(...), db: Session = Depends(get_db)):
+    """Self-service reset: the account is verified by matching BOTH username and
+    email (no mail server in this dev env), then the new password is set."""
+    username = (payload or {}).get("username", "").strip()
+    email = (payload or {}).get("email", "").strip()
+    new_pw = (payload or {}).get("new_password", "")
+    if not username or not email or not new_pw:
+        raise HTTPException(status_code=400, detail="Username, email and new password are required")
+    if len(new_pw) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    user = db.query(User).filter(User.username == username, User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No account matches that username + email")
+    user.password_hash = get_password_hash(new_pw)
+    db.commit()
+    return {"message": "Password reset successful — you can sign in now"}
 
 
 @router.post("/register", response_model=UserResponse)
