@@ -67,8 +67,8 @@ def list_inventory(
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role == UserRole.ADMIN:
-        return db.query(Inventory).all()
-    return db.query(Inventory).filter(Inventory.submitted_by == current_user.id).all()
+        return db.query(Inventory).order_by(Inventory.created_at.desc()).all()
+    return db.query(Inventory).filter(Inventory.submitted_by == current_user.id).order_by(Inventory.created_at.desc()).all()
 
 
 @router.get("/po/{po_number}/cycle/{cycle_number}", response_model=List[InventoryResponse])

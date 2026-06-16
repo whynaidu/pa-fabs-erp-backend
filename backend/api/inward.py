@@ -81,11 +81,11 @@ def list_inwards(
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role == "admin":
-        inwards = db.query(InwardEntry).all()
+        inwards = db.query(InwardEntry).order_by(InwardEntry.created_at.desc()).all()
     else:
         inwards = db.query(InwardEntry).filter(
             InwardEntry.submitted_by == current_user.id
-        ).all()
+        ).order_by(InwardEntry.created_at.desc()).all()
     return inwards
 
 

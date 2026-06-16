@@ -114,9 +114,9 @@ def list_pos(
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role == "admin":
-        pos = db.query(PurchaseOrder).all()
+        pos = db.query(PurchaseOrder).order_by(PurchaseOrder.created_at.desc()).all()
     else:
-        pos = db.query(PurchaseOrder).filter(PurchaseOrder.user_id == current_user.id).all()
+        pos = db.query(PurchaseOrder).filter(PurchaseOrder.user_id == current_user.id).order_by(PurchaseOrder.created_at.desc()).all()
     return attach_yarn_bulk(pos, db)
 
 

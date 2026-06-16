@@ -6,7 +6,7 @@ from backend.models.return_entry import ReturnType
 
 class BeamEntry(BaseModel):
     beam_metres: float = Field(gt=0)
-    total_ends: int = Field(gt=0)
+    total_ends: Optional[int] = None   # auto-filled from the PO; may be absent if the PO has none
 
 
 class ReturnBase(BaseModel):

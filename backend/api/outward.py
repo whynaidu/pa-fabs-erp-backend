@@ -59,11 +59,11 @@ def list_outwards(
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role == "admin":
-        outwards = db.query(OutwardEntry).all()
+        outwards = db.query(OutwardEntry).order_by(OutwardEntry.created_at.desc()).all()
     else:
         outwards = db.query(OutwardEntry).filter(
             OutwardEntry.submitted_by == current_user.id
-        ).all()
+        ).order_by(OutwardEntry.created_at.desc()).all()
     return outwards
 
 

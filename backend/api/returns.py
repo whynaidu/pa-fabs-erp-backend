@@ -93,11 +93,11 @@ def list_returns(
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role == "admin":
-        returns = db.query(ReturnEntry).all()
+        returns = db.query(ReturnEntry).order_by(ReturnEntry.created_at.desc()).all()
     else:
         returns = db.query(ReturnEntry).filter(
             ReturnEntry.submitted_by == current_user.id
-        ).all()
+        ).order_by(ReturnEntry.created_at.desc()).all()
     return returns
 
 
@@ -132,10 +132,12 @@ def delete_return(return_id: str, db: Session = Depends(get_db), current_user: U
     return_entry = db.query(ReturnEntry).filter(ReturnEntry.id == return_id).first()
     if not return_entry:
         raise HTTPException(status_code=404, detail="Return entry not found")
-    # Cascade: beams → loom_allocations (and free any loom still holding a beam) → beams → return
+    # Cascade: allocations (free their loom) → flush → beams → flush → return.
+    # There is NO ORM relationship between LoomAllocation/Beam, so SQLAlchemy won't
+    # order the DELETEs itself — without the explicit flush() it may try to delete a
+    # beam before the allocation that FKs it, hitting loom_allocations_beam_id_fkey.
     beams = db.query(Beam).filter(Beam.return_entry_id == return_id).all()
     for beam in beams:
-        # Delete allocations referencing this beam, freeing any loom still occupied by it
         allocs = db.query(LoomAllocation).filter(LoomAllocation.beam_id == beam.beam_number).all()
         for alloc in allocs:
             loom = db.query(Loom).filter(Loom.loom_number == alloc.loom_number).first()
@@ -145,7 +147,10 @@ def delete_return(return_id: str, db: Session = Depends(get_db), current_user: U
                 loom.current_cycle = None
                 loom.current_beam = None
             db.delete(alloc)
+    db.flush()                       # allocations gone before any beam delete
+    for beam in beams:
         db.delete(beam)
+    db.flush()                       # beams gone before the parent return delete
     db.delete(return_entry)
     db.commit()
     return {"message": "Return entry deleted"}
