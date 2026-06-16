@@ -31,8 +31,7 @@ def _delivery_readiness(db: Session, po_number: str, cycle_number: int) -> dict:
     reasons = []
     if manufactured <= 0:
         reasons.append("No fabric manufactured yet for this PO+cycle")
-    if db.query(Delivery).filter(Delivery.po_number == po_number, Delivery.cycle_number == cycle_number).first():
-        reasons.append("Delivery already exists for this PO+cycle")
+    # Multiple batch deliveries per PO+cycle are allowed now, so no "already exists" gate.
     return {"ready": len(reasons) == 0, "reasons": reasons, "manufactured_metres": manufactured}
 
 
