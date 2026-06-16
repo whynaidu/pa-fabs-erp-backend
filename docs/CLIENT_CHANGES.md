@@ -59,3 +59,14 @@ mfg per-cycle calc · delivery manufactured-gate + weight · PO shortage%/total_
 - **Q4** Manufacturing total per PO+cycle. ✅
 
 ## ALL CLIENT CHANGES (A–I) COMPLETE ✅ — deployed to Render (backend) + Vercel (frontend)
+
+## Round 2 — "PA Fabs points.docx" feedback (8 points) — ALL DONE ✅ (verified live)
+1. ✅ Inward Warp/Weft row **Count** seeds from PO's Warp Count / Weft Count (rows were moved off PO).
+2. ✅ Outward + winding-return + loom-alloc Count/Colour **dropdowns source from the latest Inward entry** (was reading the now-empty PO rows). Verified: warp count "40s" appears from inward.
+3a. ✅ Warping return **Total Ends auto-fills from PO** — a beam row is seeded on type-select and refreshed on PO change. Verified 4000 shown for a PO with total_ends.
+3b. ✅ Winding return now has a **Warp Rows** block too (was weft-only).
+4. ✅ Manufacturing **PO# / Description** now show on loom-select — fixed a camelCase bug (`current_po` → `currentPo`, code read `currentPO`). Order Qty/Balance now correct.
+5. ✅ All stage lists return **newest-first** (`order_by created_at desc` on pos/inward/outward/return/inventory; mfg/delivery/alloc already desc). Verified.
+6. ✅ Sidebar shows the **logged-in user's real name** + dept + initial (was hardcoded "Staff User"). Verified "Demo Staff User".
+7. ✅ Return **422 fixed** — `BeamEntry.total_ends` now Optional (PO-derived) and a frontend guard requires Beam Metres > 0 (clear message vs raw 422). Verified 200.
+8. ✅ Admin Return **delete 500/"failed to fetch" fixed** — `flush()` between allocation/beam/return deletes (FK ordering). Verified 200.
