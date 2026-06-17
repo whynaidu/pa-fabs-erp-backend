@@ -70,3 +70,10 @@ mfg per-cycle calc · delivery manufactured-gate + weight · PO shortage%/total_
 6. ✅ Sidebar shows the **logged-in user's real name** + dept + initial (was hardcoded "Staff User"). Verified "Demo Staff User".
 7. ✅ Return **422 fixed** — `BeamEntry.total_ends` now Optional (PO-derived) and a frontend guard requires Beam Metres > 0 (clear message vs raw 422). Verified 200.
 8. ✅ Admin Return **delete 500/"failed to fetch" fixed** — `flush()` between allocation/beam/return deletes (FK ordering). Verified 200.
+
+## Round 3 — follow-up feedback (5 points) — ALL DONE ✅ (verified)
+1. ✅ Admin **User Management → Delete user** (DELETE /users/{id}; guards self + default admin) + 🔑 reset-password action. Verified 200 / non-admin 403.
+2. ✅ **Forgot password** on login — "Forgot password?" → reset screen; POST /forgot-password verifies username+email then sets new password. Verified reset+login 200, wrong email 404. (+ admin reset PATCH /users/{id}/password.)
+3. ✅ **DC slip print == preview** — one `dcSlipMarkup()` builder for preview + saved-DC view + print; print injects the app stylesheet. Verified saved view renders full challan layout.
+4. ✅ **Loom stays assigned until full production** — partial/batch deliveries no longer free the loom; the loom is released and PO marked complete only when total manufactured ≥ order_qty. Multiple batch deliveries per PO+cycle now allowed (dropped uq_delivery_po_cycle + readiness "already exists" gate). Verified: partial→loom occupied, 2nd batch 200, full→loom freed.
+5. ✅ **Attractive emoji icons** for all user + admin nav tabs (replaced faint line-SVGs). Verified live.
