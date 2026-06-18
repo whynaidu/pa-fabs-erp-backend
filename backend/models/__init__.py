@@ -10,8 +10,10 @@ from backend.models.loom_allocation import LoomAllocation
 from backend.models.manufacturing import ManufacturingLog
 from backend.models.inventory import Inventory
 from backend.models.delivery import Delivery
+from backend.models.audit import AuditLog
 
 __all__ = [
+    "AuditLog",
     "User",
     "PurchaseOrder",
     "POYarnDetail",

@@ -71,6 +71,17 @@ def admin_reset_password(user_id: str, payload: dict = Body(...), db: Session = 
     return user
 
 
+@router.get("/audit-logs")
+def list_audit_logs(limit: int = 300, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    from backend.models.audit import AuditLog
+    rows = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(min(max(limit, 1), 2000)).all()
+    return [{
+        "id": r.id, "username": r.username, "action": r.action, "entity": r.entity,
+        "entity_id": r.entity_id, "method": r.method, "path": r.path,
+        "status_code": r.status_code, "created_at": r.created_at,
+    } for r in rows]
+
+
 @router.delete("/users/{user_id}")
 def delete_user(user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
     user = db.query(User).filter(User.id == user_id).first()

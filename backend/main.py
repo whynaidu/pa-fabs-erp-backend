@@ -21,6 +21,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_AUDIT_ACTION = {"POST": "create", "PUT": "update", "PATCH": "update", "DELETE": "delete"}
+_AUDIT_SPECIAL = {"login": "login", "register": "register", "forgot-password": "reset-password"}
+
+
+def _record_audit(request, method, path, status):
+    from backend.database import SessionLocal
+    from backend.models.audit import AuditLog
+    from backend.services.auth_service import decode_access_token
+    import uuid
+    username = None
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        payload = decode_access_token(auth.split(" ", 1)[1])
+        if payload:
+            username = payload.get("sub")
+    parts = [p for p in path.replace("/api/", "", 1).split("/") if p]
+    entity = parts[0] if parts else None
+    entity_id = parts[1] if len(parts) > 1 else None
+    action = _AUDIT_SPECIAL.get(entity, _AUDIT_ACTION.get(method))
+    db = SessionLocal()
+    try:
+        db.add(AuditLog(id=f"audit_{uuid.uuid4().hex}", username=username, action=action,
+                        entity=entity, entity_id=entity_id, method=method, path=path,
+                        status_code=status))
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+@app.middleware("http")
+async def audit_middleware(request, call_next):
+    response = await call_next(request)
+    try:
+        if request.method in _AUDIT_ACTION and request.url.path.startswith("/api/"):
+            _record_audit(request, request.method, request.url.path, response.status_code)
+    except Exception:
+        pass
+    return response
+
+
 app.include_router(auth.router, prefix="/api")
 app.include_router(pos.router, prefix="/api")
 app.include_router(inward.router, prefix="/api")
