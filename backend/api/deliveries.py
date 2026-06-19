@@ -82,6 +82,21 @@ def create_delivery(
     no_pieces = len(pieces)
     pieces_json = json.dumps(pieces)
 
+    # You can't deliver more fabric than has been woven. Across all batches for this
+    # PO+cycle, cumulative delivered metres must not exceed the manufactured metres.
+    manufactured = ready["manufactured_metres"]
+    already_delivered = float(db.query(func.coalesce(func.sum(Delivery.grand_total_metres), 0)).filter(
+        Delivery.po_number == delivery.po_number,
+        Delivery.cycle_number == cycle_number,
+    ).scalar() or 0)
+    if already_delivered + total_metres > manufactured + 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"Delivery exceeds woven fabric: {already_delivered + total_metres:.0f} m would be "
+                    f"delivered but only {manufactured:.0f} m has been manufactured for this PO/cycle "
+                    f"({already_delivered:.0f} m already delivered)"),
+        )
+
     dc_count = db.query(Delivery).count() + 1
     dc_number = f"DC-{str(dc_count).zfill(4)}"
 

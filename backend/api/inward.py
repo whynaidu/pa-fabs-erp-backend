@@ -30,14 +30,19 @@ def create_inward(
     ).scalar() or 0
 
     if max_cycle > 0:
-        prev_delivery = db.query(Delivery).filter(
-            Delivery.po_number == inward.po_number,
-            Delivery.cycle_number == max_cycle
+        # A new cycle is a repeat run that re-uses looms. It may start only once the
+        # previous cycle's looms are freed — i.e. its full quantity was produced and
+        # delivered (deliveries are now in batches, so "a delivery exists" is no longer
+        # enough). Block while any loom is still occupied by the previous cycle.
+        from backend.models.loom import Loom
+        busy = db.query(Loom).filter(
+            Loom.current_po == inward.po_number,
+            Loom.current_cycle == max_cycle,
         ).first()
-        if not prev_delivery:
+        if busy:
             raise HTTPException(
                 status_code=400,
-                detail=f"Previous cycle {max_cycle} delivery must be completed before starting new cycle"
+                detail=f"Cycle {max_cycle} is still in production on Loom {busy.loom_number} — finish and deliver it before starting a new cycle",
             )
 
     new_inward = InwardEntry(
@@ -106,20 +111,23 @@ def inwards_for_cycle(po_number: str, cycle_number: int, db: Session = Depends(g
 @router.get("/po/{po_number}/can-start")
 def can_start_cycle(po_number: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Cycle guard: a new inward (cycle N+1) is allowed only when the previous
-    cycle has a completed delivery. First cycle is always allowed."""
+    cycle's looms are freed (full production done + delivered). First cycle is
+    always allowed."""
     require_po_access(po_number, db, current_user)
     max_cycle = db.query(func.max(InwardEntry.cycle_number)).filter(
         InwardEntry.po_number == po_number
     ).scalar() or 0
     if max_cycle == 0:
         return {"can_start": True, "next_cycle": 1, "reason": None}
-    delivered = db.query(Delivery).filter(
-        Delivery.po_number == po_number, Delivery.cycle_number == max_cycle
-    ).first() is not None
+    from backend.models.loom import Loom
+    busy = db.query(Loom).filter(
+        Loom.current_po == po_number, Loom.current_cycle == max_cycle
+    ).first()
+    can = busy is None
     return {
-        "can_start": delivered,
-        "next_cycle": max_cycle + 1 if delivered else max_cycle,
-        "reason": None if delivered else f"Cycle {max_cycle} delivery not complete",
+        "can_start": can,
+        "next_cycle": max_cycle + 1 if can else max_cycle,
+        "reason": None if can else f"Cycle {max_cycle} still in production on Loom {busy.loom_number}",
     }
 
 
