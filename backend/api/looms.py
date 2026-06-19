@@ -56,6 +56,19 @@ def allocate_loom(
     if not beam:
         raise HTTPException(status_code=404, detail="Beam not found")
 
+    # A warp beam is physically loaded onto ONE loom — it must still be available.
+    # (The UI hides used beams, but guard here too against direct calls / races.)
+    if beam.status != BeamStatus.AVAILABLE:
+        raise HTTPException(status_code=400, detail=f"Beam {beam.beam_number} is already allocated")
+
+    # Defensive: never double-allocate via a still-active allocation either.
+    existing = db.query(LoomAllocation).filter(
+        LoomAllocation.beam_id == allocation.beam_id,
+        LoomAllocation.status == AllocationStatus.ACTIVE,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Beam {beam.beam_number} is already on Loom {existing.loom_number}")
+
     new_allocation = LoomAllocation(
         id=f"alloc_{uuid.uuid4().hex}",
         po_number=allocation.po_number,
