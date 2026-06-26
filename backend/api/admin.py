@@ -1,13 +1,41 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from typing import List
+import uuid
 from backend.database import get_db
 from backend.models.user import User, UserStatus, UserRole
-from backend.schemas.user import UserResponse, UserUpdate
+from backend.schemas.user import UserResponse, UserUpdate, UserCreate
 from backend.services.auth_service import get_password_hash
 from backend.api.deps import get_current_admin
 
 router = APIRouter(tags=["Admin"])
+
+
+@router.post("/users", response_model=UserResponse, status_code=201)
+def create_user(payload: UserCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    """Admin creates a user (role user OR admin), active immediately — no approval step."""
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if db.query(User).filter(User.email == payload.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if db.query(User).filter(User.username == payload.username).first():
+        raise HTTPException(status_code=400, detail="Username already taken")
+    user = User(
+        id=f"user_{uuid.uuid4().hex}",
+        full_name=payload.full_name,
+        email=payload.email,
+        phone=payload.phone,
+        username=payload.username,
+        password_hash=get_password_hash(payload.password),
+        role=payload.role,
+        department=payload.department,
+        is_approved=True,
+        status=UserStatus.APPROVED,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.get("/users", response_model=List[UserResponse])
