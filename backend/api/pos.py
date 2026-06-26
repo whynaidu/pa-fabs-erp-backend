@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
+from backend.models.loom import Loom, LoomStatus
 from typing import List
 from backend.database import get_db
 from backend.models.user import User
@@ -233,7 +234,23 @@ def delete_po(po_number: str, db: Session = Depends(get_db), current_user: User 
     if not po:
         raise HTTPException(status_code=404, detail="PO not found")
 
-    db.query(POYarnDetail).filter(POYarnDetail.po_number == po_number).delete()
+    # Free any loom still running this PO so it isn't left occupied by a ghost order.
+    for loom in db.query(Loom).filter(Loom.current_po == po_number).all():
+        loom.status = LoomStatus.FREE
+        loom.current_po = None
+        loom.current_cycle = None
+        loom.current_beam = None
+        loom.allocated_by = None
+        loom.allocated_at = None
+    db.flush()
+
+    # Cascade-delete every dependent record (children before parents) so the FK
+    # constraints don't block the PO delete. A PO that's been through the flow has
+    # inward/outward/return/beam/allocation/manufacturing/inventory/delivery rows.
+    for table in ("loom_allocations", "beams", "return_entries", "manufacturing_logs",
+                  "inventory", "deliveries", "outward_entries", "inward_entries", "po_yarn_details"):
+        db.execute(text(f"DELETE FROM {table} WHERE po_number = :po"), {"po": po_number})
+
     db.delete(po)
     db.commit()
-    return {"message": "PO deleted successfully"}
+    return {"message": "PO and all related records deleted"}
